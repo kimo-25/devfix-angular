@@ -1,0 +1,56 @@
+<div class="dx {{v.themeClass}}" dir="rtl">
+<header style="background:var(--bar);color:var(--on-bar)">
+<div class="wrap" style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;min-height:72px">
+<div style="display:flex;align-items:center;gap:24px;flex-wrap:wrap">
+<a routerLink="/" style="display:flex;align-items:center;gap:10px"><span style="width:36px;height:36px;border-radius:10px;background:var(--primary);color:var(--on-primary);display:grid;place-items:center"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3.5 17.5a1.8 1.8 0 0 0 2.5 2.5l5.8-5.8a4 4 0 0 0 5.4-5.4l-2.4 2.4-2.3-.5-.5-2.3z"/></svg></span><span style="font-weight:800;font-size:22px">DevFix</span><span style="font-size:13px;font-weight:700;padding:2px 10px;border-radius:999px;background:rgba(255,255,255,.16)">لوحة المنصة</span></a>
+<nav style="display:flex;gap:4px;flex-wrap:wrap" aria-label="لوحة المنصة"><a class="atab" routerLink="/admin/verify">تسجيل المحلات</a><a class="atab" routerLink="/admin/ops">النزاعات والعمليات</a><a class="atab on" href="#" (click)="$event.preventDefault()">المالية والتحليلات</a></nav>
+</div>
+<span style="font-weight:700;opacity:.85">مسؤول العمليات ومحلل البيانات</span>
+</div>
+</header>
+
+<main class="wrap" style="padding-top:32px;padding-bottom:64px;display:flex;flex-direction:column;gap:24px">
+<div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:flex-end"><div><h1 style="font-size:30px;font-weight:800">التدقيق المالي والتحليلات</h1><p style="color:var(--muted)">مؤشرات المنصة وسجل التدقيق. الأرقام أدناه توضيحية للتصميم.</p></div><span style="font-size:13px;font-weight:700;padding:4px 12px;border-radius:999px;background:var(--primary-soft);color:var(--primary)">بيانات توضيحية</span></div>
+
+<div style="display:flex;flex-wrap:wrap;gap:16px">
+<div class="card kpi"><p style="font-size:13px;font-weight:700;color:var(--muted)">حجم التعاملات (دوران النظام)</p><p style="font-size:34px;font-weight:800">١٢٤٬٦٠٠ <span style="font-size:15px;color:var(--muted)">جنيه</span></p></div>
+<div class="card kpi"><p style="font-size:13px;font-weight:700;color:var(--muted)">عمولات محصّلة (١٠٪)</p><p style="font-size:34px;font-weight:800;color:var(--accent)">١٢٬٤٦٠ <span style="font-size:15px;color:var(--muted)">جنيه</span></p></div>
+<div class="card kpi"><p style="font-size:13px;font-weight:700;color:var(--muted)">غرامات تأخير مطبّقة (٥٪)</p><p style="font-size:34px;font-weight:800;color:var(--warn)">٢٬١٨٠ <span style="font-size:15px;color:var(--muted)">جنيه</span></p></div>
+<div class="card kpi"><p style="font-size:13px;font-weight:700;color:var(--muted)">محلات محظورة حالياً</p><p style="font-size:34px;font-weight:800;color:var(--danger)">٢</p><a routerLink="/admin/ops" style="font-size:14px;font-weight:700;color:var(--primary)">عرض القائمة</a></div>
+</div>
+
+<section class="card" style="padding:26px 28px;display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center"><h2 style="font-size:22px;font-weight:800">الالتزام بالمواعيد — آخر ٨ أسابيع</h2>
+<div style="display:flex;gap:16px;flex-wrap:wrap;font-size:14px;font-weight:600"><span><span class="sw" style="background:var(--c1)"></span>في الموعد</span><span><span class="sw" style="background:var(--c2)"></span>دخل مهلة الإنذار وسُلّم</span><span><span class="sw" style="background:var(--c3)"></span>تجاوز المهلة</span></div></div>
+<div style="overflow-x:auto"><div role="img" aria-label="رسم بياني عمودي لعدد الطلبات المكتملة أسبوعياً مقسماً حسب الالتزام بالموعد" style="display:flex;align-items:flex-end;gap:16px;height:240px;min-width:560px;padding-top:8px;border-bottom:1px solid var(--line)">
+@for (b of v.bars; track $index) {
+<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;height:100%;justify-content:flex-end"><div [attr.style]="'' + 'width:100%;max-width:56px;display:flex;flex-direction:column;border-radius:8px;overflow:hidden;height:' + (b.h) + 'px'"><div [attr.style]="'' + 'flex:' + (b.late) + ';background:var(--c3)'"></div><div [attr.style]="'' + 'flex:' + (b.grace) + ';background:var(--c2)'"></div><div [attr.style]="'' + 'flex:' + (b.ok) + ';background:var(--c1)'"></div></div></div>
+}</div>
+<div style="display:flex;gap:16px;min-width:560px">@for (b of v.bars; track $index) {<span style="flex:1;text-align:center;font-size:13px;color:var(--muted);font-weight:600">{{b.label}}</span>}</div></div>
+</section>
+
+<div style="display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start">
+<section class="card" style="flex:1 1 480px;min-width:0;padding:26px 28px">
+<h2 style="font-size:22px;font-weight:800;margin-bottom:4px">اعتماد طلبات سحب الأرباح</h2>
+<p style="color:var(--muted);font-size:14px;margin-bottom:6px">تراجع الأرصدة وسجل الحركات قبل الاعتماد.</p>
+@for (w of v.withdrawals; track $index) {
+<div class="row"><div><p style="font-weight:700">{{w.center}}</p><p style="font-size:13px;color:var(--muted)">{{w.dest}}</p></div>
+<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b style="font-size:18px">{{w.amount}} جنيه</b>
+@if (w.open) {<button class="btn btn-accent" (click)="w.approve()">اعتماد</button><button class="btn btn-danger" (click)="w.hold()">تعليق للمراجعة</button>}
+@if (w.done) {<span [attr.style]="'' + 'font-weight:800;color:' + (w.color)">{{w.result}}</span>}</div></div>
+}
+</section>
+
+<section class="card" style="flex:1 1 420px;min-width:0;padding:26px 28px">
+<h2 style="font-size:22px;font-weight:800;margin-bottom:4px">سجل التدقيق</h2>
+<p style="color:var(--muted);font-size:14px;margin-bottom:6px">آخر العمليات المالية والإدارية.</p>
+<div class="row"><span>غرامة تأخير ٥٪ مطبّقة تلقائياً</span><span style="color:var(--muted);font-size:13px">النظام · منذ ١٠ دقائق</span></div>
+<div class="row"><span>إغلاق إداري لطلب لم يُستلم</span><span style="color:var(--muted);font-size:13px">موظف · منذ ساعة</span></div>
+<div class="row"><span>حظر آلي لمحل ٧ أيام</span><span style="color:var(--muted);font-size:13px">النظام · أمس</span></div>
+<div class="row"><span>اعتماد طلب سحب</span><span style="color:var(--muted);font-size:13px">موظف · أمس</span></div>
+<div class="row"><span>قبول محل جديد بعد مراجعة الأوراق</span><span style="color:var(--muted);font-size:13px">موظف · أمس</span></div>
+</section>
+</div>
+</main>
+<app-demo-nav></app-demo-nav>
+</div>

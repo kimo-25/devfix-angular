@@ -1,0 +1,34 @@
+<div class="dx {{v.themeClass}}" dir="rtl">
+<header style="border-bottom:1px solid var(--line);background:var(--surface)">
+<div class="wrap" style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;min-height:72px">
+<div style="display:flex;align-items:center;gap:24px;flex-wrap:wrap">
+<a routerLink="/" style="display:flex;align-items:center;gap:10px"><span style="width:36px;height:36px;border-radius:10px;background:var(--primary);color:var(--on-primary);display:grid;place-items:center"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3.5 17.5a1.8 1.8 0 0 0 2.5 2.5l5.8-5.8a4 4 0 0 0 5.4-5.4l-2.4 2.4-2.3-.5-.5-2.3z"/></svg></span><span style="font-weight:800;font-size:22px">DevFix</span></a>
+<nav style="display:flex;gap:4px;flex-wrap:wrap" aria-label="لوحة العميل"><a class="tab" routerLink="/tracking">لوحة التحكم</a><a class="tab" routerLink="/tracking">طلباتي</a><a class="tab" routerLink="/devices">أجهزتي</a><a class="tab" routerLink="/wallet">المحفظة</a><a class="tab on" href="#" (click)="$event.preventDefault()">حسابي</a></nav>
+</div></div></header>
+
+<main class="wrap" style="padding-top:32px;padding-bottom:64px;display:flex;flex-direction:column;gap:24px">
+<h1 style="font-size:30px;font-weight:800">حسابي</h1>
+<div style="display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start">
+<div style="flex:1 1 480px;min-width:0;display:flex;flex-direction:column;gap:24px">
+<section class="card"><h2 style="font-size:20px;font-weight:800">البيانات الشخصية</h2>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px">
+<div style="display:flex;flex-direction:column;gap:6px"><label for="a1">الاسم</label><input id="a1" class="input" type="text" value="[ الاسم ]"></div>
+<div style="display:flex;flex-direction:column;gap:6px"><label for="a2">رقم الموبايل</label><input id="a2" class="input" type="text" dir="ltr" value="01XXXXXXXXX"></div>
+<div style="display:flex;flex-direction:column;gap:6px"><label for="a3">البريد الإلكتروني</label><input id="a3" class="input" type="text" dir="ltr" value="name@example.com"></div>
+<div style="display:flex;flex-direction:column;gap:6px"><label for="a4">كلمة المرور</label><input id="a4" class="input" type="password" dir="ltr" value="••••••••"></div>
+</div>
+<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap"><button class="btn btn-primary" (click)="v.save()">حفظ التغييرات</button>@if (v.saved) {<span style="font-weight:700;color:var(--accent)">تم الحفظ</span>}</div></section>
+
+<section class="card" style="gap:4px"><div style="margin-bottom:8px"><h2 style="font-size:20px;font-weight:800">الإشعارات</h2><p style="color:var(--muted);font-size:14px">اختر ما يصلك فوراً.</p></div>
+@for (t of v.toggles; track $index) {<button class="tg {{t.cls}}" (click)="t.flip()" [attr.aria-pressed]="t.pressed"><span>{{t.label}}</span><span class="sw"></span></button>}</section>
+</div>
+
+<aside style="flex:1 1 320px;max-width:420px;min-width:0;display:flex;flex-direction:column;gap:24px">
+<section class="card"><h2 style="font-size:20px;font-weight:800">أجهزتي</h2><p style="color:var(--muted);font-size:14px">٣ أجهزة مسجلة. الافتراضي: iPhone 13.</p><a class="btn btn-ghost" routerLink="/devices">إدارة الأجهزة</a></section>
+<section class="card"><h2 style="font-size:20px;font-weight:800">المظهر واللغة</h2><p style="color:var(--muted);font-size:14px">اللغة: العربية (RTL). غيّر المظهر من لوحة Tweaks.</p></section>
+<section class="card"><h2 style="font-size:20px;font-weight:800">الأمان</h2><p style="color:var(--muted);font-size:14px">أكواد OTP للإيداع والاستلام تُولَّد على جهازك فقط ولا تُشارك إلا شفهياً مع المحل.</p><a class="btn btn-ghost" routerLink="/auth">تسجيل الخروج</a></section>
+</aside>
+</div>
+</main>
+<app-demo-nav></app-demo-nav>
+</div>

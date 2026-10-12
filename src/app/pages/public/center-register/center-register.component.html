@@ -1,0 +1,44 @@
+<div class="dx {{v.themeClass}}" dir="rtl">
+<header style="border-bottom:1px solid var(--line);background:var(--surface)"><div class="wrap" style="display:flex;justify-content:space-between;align-items:center;min-height:72px"><a routerLink="/" style="font-weight:800;font-size:22px">DevFix <span style="font-size:13px;font-weight:700;padding:2px 10px;border-radius:999px;background:var(--accent-soft);color:var(--accent)">للمحلات</span></a><a class="btn btn-ghost" style="min-height:44px" routerLink="/auth">لدي حساب</a></div></header>
+
+<main class="wrap" style="padding-top:32px;padding-bottom:64px;display:flex;flex-direction:column;gap:20px">
+
+@if (v.notSent) {
+<div><h1 style="font-size:30px;font-weight:800">انضم كمحل صيانة موثّق</h1><p style="color:var(--muted)">يراجع فريق المنصة أوراقك وتخصصاتك قبل تفعيل الحساب. لكل محل حساب واحد.</p></div>
+
+<section class="card"><h2 style="font-size:20px;font-weight:800">بيانات المحل</h2>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px">
+<div style="display:flex;flex-direction:column;gap:6px"><label for="sn">اسم المحل</label><input id="sn" class="input" type="text"></div>
+<div style="display:flex;flex-direction:column;gap:6px"><label for="on">اسم المالك</label><input id="on" class="input" type="text"></div>
+<div style="display:flex;flex-direction:column;gap:6px"><label for="ph">رقم الموبايل</label><input id="ph" class="input" type="text" dir="ltr"></div>
+<div style="display:flex;flex-direction:column;gap:6px"><label for="ad">العنوان والموقع</label><input id="ad" class="input" type="text"></div>
+</div></section>
+
+<section class="card"><div><h2 style="font-size:20px;font-weight:800">التخصصات</h2><p style="color:var(--muted);font-size:14px">تصلك إشعارات الطلبات المتوافقة مع هذه التخصصات فقط.</p></div>
+<div><p style="font-weight:700;font-size:14px;margin-bottom:8px">أنواع الأجهزة</p><div style="display:flex;gap:8px;flex-wrap:wrap">@for (d of v.devs; track $index) {<button class="chip {{d.cls}}" (click)="d.toggle()" [attr.aria-pressed]="d.pressed">{{d.label}}</button>}</div></div>
+<div><p style="font-weight:700;font-size:14px;margin-bottom:8px">فئات الأعطال</p><div style="display:flex;gap:8px;flex-wrap:wrap">@for (i of v.issues; track $index) {<button class="chip {{i.cls}}" (click)="i.toggle()" [attr.aria-pressed]="i.pressed">{{i.label}}</button>}</div></div>
+</section>
+
+<section class="card"><div><h2 style="font-size:20px;font-weight:800">خدمة التوصيل</h2><p style="color:var(--muted);font-size:14px">اختيارية. الرسم ثابت ويُضاف كبند منفصل في الفاتورة.</p></div>
+<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center"><button class="chip {{v.delCls}}" (click)="v.toggleDel()" [attr.aria-pressed]="v.delP">{{v.delText}}</button>
+@if (v.delOn) {<div style="display:flex;align-items:center;gap:10px"><label for="fee">رسم التوصيل (جنيه)</label><input id="fee" class="input" type="number" min="0" dir="ltr" style="width:140px"></div>}</div></section>
+
+<section class="card"><div><h2 style="font-size:20px;font-weight:800">الأوراق الرسمية</h2><p style="color:var(--muted);font-size:14px">صور واضحة بصيغة JPG أو PNG أو PDF.</p></div>
+@for (o of v.docs; track $index) {
+<div class="doc"><div><p style="font-weight:700">{{o.label}}</p><p [attr.style]="'' + 'font-size:13px;color:' + (o.color)">{{o.state}}</p></div><button class="btn btn-ghost" style="min-height:44px" (click)="o.pick()">{{o.btn}}</button></div>
+}</section>
+
+<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><p style="font-size:14px;color:var(--muted)">{{v.hint}}</p><button class="btn btn-primary" (click)="v.submit()" [disabled]="v.cant">إرسال للمراجعة</button></div>
+}
+
+@if (v.sent) {
+<div class="card" style="text-align:center;align-items:center;padding:56px 28px">
+<span style="width:72px;height:72px;border-radius:50%;background:var(--warn-soft);color:var(--warn);display:grid;place-items:center"><svg class="ico" style="width:36px;height:36px" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>
+<h1 style="font-size:28px;font-weight:800">طلبك قيد المراجعة</h1>
+<p style="color:var(--muted);max-width:420px">سيراجع فريق المنصة أوراقك وتخصصاتك، وسنخطرك بالقرار. عند الرفض سنوضح لك السبب.</p>
+<button class="btn btn-ghost" (click)="v.reset()">إعادة العرض</button>
+</div>
+}
+</main>
+<app-demo-nav></app-demo-nav>
+</div>

@@ -1,0 +1,35 @@
+<div class="dx {{v.themeClass}}" dir="rtl">
+
+<!-- customer side -->
+<div class="dlg" role="dialog" aria-modal="true" [attr.aria-label]="v.cTitle">
+<span class="tagl">على جهاز العميل</span>
+<div><h2 style="font-size:24px;font-weight:800">{{v.cTitle}}</h2><p style="color:var(--muted)">{{v.cHelp}}</p></div>
+@if (v.noCode) {<button class="btn btn-primary" (click)="v.gen()">{{v.cBtn}}</button>}
+@if (v.hasCode) {
+<div style="display:flex;gap:10px;justify-content:center" dir="ltr">@for (d of v.digits; track $index) {<span class="otp">{{d}}</span>}</div>
+<p style="text-align:center;font-weight:700">أمله شفهياً لموظف المحل · صالح لمدة <span style="font-variant-numeric:tabular-nums">{{v.left}}</span></p>
+<button class="btn btn-ghost" (click)="v.gen()">توليد كود جديد</button>
+}
+<p style="font-size:13px;color:var(--muted)">{{v.cNote}}</p>
+</div>
+
+<!-- center side -->
+<div class="dlg" role="dialog" aria-modal="true" [attr.aria-label]="v.sTitle">
+<span class="tagl" style="background:var(--accent-soft);color:var(--accent)">لوحة تحكم المحل</span>
+@if (v.entry) {
+<div><h2 style="font-size:24px;font-weight:800">{{v.sTitle}}</h2><p style="color:var(--muted)">اطلب الكود من العميل وأدخله هنا. لا يمكنك توليده أو معرفته.</p></div>
+<input class="otpin" type="text" inputmode="numeric" maxlength="4" placeholder="••••" dir="ltr" aria-label="كود التحقق" (change)="v.setIn($event)">
+@if (v.bad) {<p role="alert" style="color:var(--danger);font-weight:700;font-size:14px">الكود يجب أن يكون ٤ أرقام.</p>}
+<button class="btn btn-accent" (click)="v.confirm()">{{v.sBtn}}</button>
+<div><div class="row"><span style="color:var(--muted)">الجهاز</span><b>iPhone 13</b></div><div class="row"><span style="color:var(--muted)">النتيجة عند التأكيد</span><b>{{v.result}}</b></div></div>
+}
+@if (v.ok) {
+<div style="text-align:center;display:flex;flex-direction:column;gap:12px;align-items:center">
+<span style="width:72px;height:72px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center"><svg class="ico" style="width:36px;height:36px" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span>
+<h2 style="font-size:24px;font-weight:800">{{v.okTitle}}</h2><p style="color:var(--muted)">{{v.okText}}</p>
+<button class="btn btn-ghost" (click)="v.reset()">إعادة العرض</button>
+</div>
+}
+</div>
+<app-demo-nav></app-demo-nav>
+</div>

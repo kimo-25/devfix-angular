@@ -1,0 +1,109 @@
+<div class="dx {{v.themeClass}}" dir="rtl">
+
+<header style="border-bottom:1px solid var(--line);background:var(--surface)">
+<div class="wrap" style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;min-height:72px">
+<div style="display:flex;align-items:center;gap:24px;flex-wrap:wrap">
+<a routerLink="/" style="display:flex;align-items:center;gap:10px"><span style="width:36px;height:36px;border-radius:10px;background:var(--primary);color:var(--on-primary);display:grid;place-items:center"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3.5 17.5a1.8 1.8 0 0 0 2.5 2.5l5.8-5.8a4 4 0 0 0 5.4-5.4l-2.4 2.4-2.3-.5-.5-2.3z"/></svg></span><span style="font-weight:800;font-size:22px">DevFix</span></a>
+<nav style="display:flex;gap:4px;flex-wrap:wrap" aria-label="لوحة العميل"><a class="tab" routerLink="/tracking">لوحة التحكم</a><a class="tab on" href="#" (click)="$event.preventDefault()">طلباتي</a><a class="tab" routerLink="/devices">أجهزتي</a><a class="tab" routerLink="/wallet">المحفظة</a><a class="tab" routerLink="/account">حسابي</a></nav>
+</div>
+<button class="btn btn-ghost" style="min-height:44px;width:44px;padding:0" aria-label="الإشعارات"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9a6 6 0 0 1 12 0c0 6 2.5 7 2.5 7h-17S6 15 6 9zM10 20a2 2 0 0 0 4 0"/></svg></button>
+</div>
+</header>
+
+<main class="wrap" style="padding-top:32px;padding-bottom:64px;display:flex;flex-direction:column;gap:24px">
+
+<section style="display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between">
+<div><p style="font-size:14px;font-weight:700;color:var(--muted)">طلب رقم [ #الرقم ] · مركز النخبة</p><h1 style="font-size:30px;font-weight:800">iPhone 13 — شاشة مكسورة</h1></div>
+<span [attr.style]="'' + 'padding:8px 18px;border-radius:999px;font-weight:800;background:' + (v.statusBg) + ';color:' + (v.statusFg)">{{v.statusText}}</span>
+</section>
+
+<!-- progress -->
+<section class="card" style="padding:24px 26px" aria-label="مراحل الطلب">
+<div style="display:flex;gap:14px;flex-wrap:wrap">
+@for (s of v.steps; track $index) {
+<div class="step {{s.cls}}"><div class="bar"></div><div style="display:flex;align-items:center;gap:10px"><span class="dot">{{s.n}}</span><span class="lbl">{{s.label}}</span></div></div>
+}
+</div>
+</section>
+
+<div style="display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start">
+
+<section style="flex:999 1 620px;min-width:0;display:flex;flex-direction:column;gap:24px">
+
+<!-- timer -->
+@if (v.showTimer) {
+<div class="card" [attr.style]="'' + 'padding:28px;display:flex;flex-direction:column;gap:18px;border:2px solid ' + (v.timerBorder)">
+<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap">
+<div><p style="font-weight:700;color:var(--muted)">{{v.timerTitle}}</p>
+<p [attr.style]="'' + 'font-size:68px;line-height:1.1;font-weight:800;color:' + (v.timerColor) + ';font-variant-numeric:tabular-nums;letter-spacing:2px;margin-top:4px'" dir="ltr">{{v.timerValue}}</p></div>
+<div style="text-align:left"><p style="font-size:13px;font-weight:700;color:var(--muted)">التسليم المتوقع</p><p style="font-weight:800;font-size:18px">{{v.expectedAt}}</p><p style="font-size:13px;color:var(--muted)">نهاية المهلة: {{v.graceAt}}</p></div>
+</div>
+<div style="display:flex;gap:4px;height:12px" aria-hidden="true">
+<div [attr.style]="'' + 'flex:' + (v.mainFlex) + ';border-radius:99px 0 0 99px;background:var(--line);overflow:hidden'"><div [attr.style]="'' + 'height:100%;width:' + (v.mainPct) + '%;background:' + (v.timerColor)"></div></div>
+<div [attr.style]="'' + 'flex:' + (v.graceFlex) + ';border-radius:0 99px 99px 0;background:var(--warn-soft);overflow:hidden'"><div [attr.style]="'' + 'height:100%;width:' + (v.gracePct) + '%;background:var(--warn)'"></div></div>
+</div>
+<div style="display:flex;justify-content:space-between;font-size:13px;color:var(--muted);font-weight:600"><span>مدة الإصلاح ٢٤ ساعة</span><span>مهلة الإنذار ٤٫٨ ساعة (٢٠٪)</span></div>
+
+@if (v.isGrace) {
+<div role="alert" style="display:flex;gap:14px;padding:16px 18px;border-radius:16px;background:var(--warn-soft);color:var(--warn)"><svg class="ico" style="flex:none;width:26px;height:26px" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2.5 20h19zM12 10v4.5M12 17.5v.01"/></svg><div><p style="font-weight:800">انتهت مدة الإصلاح ودخل الطلب مهلة الإنذار</p><p style="font-size:14px">أُرسل تنبيه عاجل للمحل. إذا تجاوزت المهلة سيُردّ لمحفظتك ٥٪ من قيمة الطلب تلقائياً.</p></div></div>
+}
+@if (v.isLate) {
+<div role="alert" style="display:flex;gap:14px;padding:16px 18px;border-radius:16px;background:var(--danger-soft);color:var(--danger)"><svg class="ico" style="flex:none;width:26px;height:26px" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2.5 20h19zM12 10v4.5M12 17.5v.01"/></svg><div><p style="font-weight:800">تجاوز المحل مهلة الإنذار — أُضيف تعويض ٤٢٫٥ جنيه لمحفظتك</p><p style="font-size:14px">خصم ثابت ٥٪ من ٨٥٠ جنيه. سُجلت مخالفة تأخير على المحل، ويمكنك متابعة الطلب أو التواصل مع الدعم.</p></div></div>
+}
+@if (v.isFrozen) {
+<div role="alert" style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;justify-content:space-between;padding:16px 18px;border-radius:16px;background:var(--primary-soft);color:var(--ink)"><div><p style="font-weight:800">العداد متوقف بانتظار ردك</p><p style="font-size:14px;color:var(--muted)">اكتشف المحل عطلاً إضافياً وقدّم طلب تعديل بالتكلفة والمدة.</p></div><a class="btn btn-primary" routerLink="/scope-change">راجع طلب التعديل</a></div>
+}
+</div>
+}
+
+<!-- OTP -->
+@if (v.showOtp) {
+<div class="card" style="padding:28px;display:flex;flex-direction:column;gap:18px">
+<div><h2 style="font-size:22px;font-weight:800">{{v.otpTitle}}</h2><p style="color:var(--muted)">{{v.otpHelp}}</p></div>
+@if (v.noCode) {<button class="btn btn-primary" style="align-self:flex-start;min-height:52px" (click)="v.genOtp()">{{v.otpBtn}}</button>}
+@if (v.hasCode) {
+<div style="display:flex;flex-wrap:wrap;gap:20px;align-items:center">
+<div style="display:flex;gap:10px" dir="ltr" [attr.aria-label]="'' + 'كود التحقق ' + (v.code)">@for (d of v.digits; track $index) {<span class="otp">{{d}}</span>}</div>
+<div><p style="font-weight:700">أمله شفهياً لموظف المحل</p><p style="font-size:14px;color:var(--muted)">صالح لمدة <b style="font-variant-numeric:tabular-nums">{{v.otpLeft}}</b> · لا يظهر إلا على جهازك</p></div>
+</div>
+}
+</div>
+}
+
+<!-- history -->
+<div class="card" style="padding:26px">
+<h2 style="font-size:20px;font-weight:800;margin-bottom:12px">سجل الحالة</h2>
+@for (h of v.history; track $index) {
+<div class="row"><span style="font-weight:700">{{h.label}}</span><span style="color:var(--muted);white-space:nowrap">{{h.time}}</span></div>
+}
+</div>
+</section>
+
+<aside style="flex:1 1 340px;max-width:420px;min-width:0;display:flex;flex-direction:column;gap:20px">
+<div class="card" style="padding:24px">
+<h2 style="font-size:20px;font-weight:800;margin-bottom:6px">تفاصيل الطلب</h2>
+<div class="row" style="border-top:0"><span style="color:var(--muted)">المحل</span><b>مركز النخبة · ٤٫٨ ★</b></div>
+<div class="row"><span style="color:var(--muted)">قيمة العرض</span><b>٨٥٠ جنيه</b></div>
+<div class="row"><span style="color:var(--muted)">المحجوز في المحفظة</span><b style="color:var(--accent)">٨٥٠ جنيه</b></div>
+<div class="row"><span style="color:var(--muted)">طريقة التسليم</span><b>شخصياً (مثبّتة)</b></div>
+<div class="row"><span style="color:var(--muted)">الضمان</span><b>يبدأ بعد التسليم</b></div>
+</div>
+
+<div class="card" style="padding:24px;display:flex;flex-direction:column;gap:12px">
+<h2 style="font-size:20px;font-weight:800">ألوان العداد</h2>
+<p style="display:flex;gap:10px;align-items:center;font-size:14px"><span style="width:14px;height:14px;border-radius:50%;background:var(--accent)"></span>ضمن مدة الإصلاح المتفق عليها</p>
+<p style="display:flex;gap:10px;align-items:center;font-size:14px"><span style="width:14px;height:14px;border-radius:50%;background:var(--warn)"></span>مهلة إنذار: المحل متأخر ولم يُطبّق خصم بعد</p>
+<p style="display:flex;gap:10px;align-items:center;font-size:14px"><span style="width:14px;height:14px;border-radius:50%;background:var(--danger)"></span>تجاوز المهلة: تعويض ٥٪ في محفظتك</p>
+<p style="font-size:13px;color:var(--muted)">استخدم لوحة Tweaks لتجربة المراحل وحالات العداد.</p>
+</div>
+
+<div class="card" style="padding:24px;display:flex;flex-direction:column;gap:10px">
+<h2 style="font-size:20px;font-weight:800">إلغاء الطلب</h2>
+<p style="font-size:14px;color:var(--muted)">{{v.cancelText}}</p>
+<button class="btn btn-ghost" style="color:var(--danger);border-color:var(--danger)">إلغاء الطلب</button>
+</div>
+</aside>
+</div>
+</main>
+<app-demo-nav></app-demo-nav>
+</div>

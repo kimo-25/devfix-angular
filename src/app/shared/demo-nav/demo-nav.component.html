@@ -1,0 +1,11 @@
+<div class="dn">
+@if (v.open) {
+<nav class="panel" aria-label="التنقل بين الشاشات">
+<div><p class="g">العامة</p><div class="links"><a routerLink="/">الصفحة الرئيسية</a><a routerLink="/auth">تسجيل الدخول</a><a routerLink="/center/register">تسجيل محل</a></div></div>
+<div><p class="g">العميل</p><div class="links"><a routerLink="/devices">أجهزتي</a><a routerLink="/wizard">طلب صيانة</a><a routerLink="/bids">مقارنة العروض</a><a routerLink="/tracking">تتبع الطلب</a><a routerLink="/scope-change">تعديل النطاق</a><a routerLink="/otp-dialogs">نوافذ OTP</a><a routerLink="/wallet">المحفظة</a><a routerLink="/account">حسابي</a></div></div>
+<div><p class="g">محل الصيانة</p><div class="links"><a routerLink="/center/feed">سوق الطلبات</a><a routerLink="/center/jobs">الطلبات الجارية</a><a routerLink="/center/wallet">المحفظة والأداء</a></div></div>
+<div><p class="g">المنصة</p><div class="links"><a routerLink="/admin/verify">تسجيل المحلات</a><a routerLink="/admin/ops">النزاعات</a><a routerLink="/admin/finance">المالية</a></div></div>
+</nav>
+}
+<div class="bar"><button class="fab" (click)="v.toggle()" [attr.aria-expanded]="v.expanded">{{v.label}}</button><button class="fab alt" (click)="v.toggleTheme()">{{v.themeLabel}}</button></div>
+</div>

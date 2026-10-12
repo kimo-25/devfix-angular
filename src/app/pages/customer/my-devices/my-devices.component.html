@@ -1,0 +1,51 @@
+<div class="dx {{v.themeClass}}" dir="rtl">
+
+<header style="border-bottom:1px solid var(--line);background:var(--surface)">
+<div class="wrap" style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;min-height:72px">
+<div style="display:flex;align-items:center;gap:24px;flex-wrap:wrap">
+<a routerLink="/" style="display:flex;align-items:center;gap:10px"><span style="width:36px;height:36px;border-radius:10px;background:var(--primary);color:var(--on-primary);display:grid;place-items:center"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3.5 17.5a1.8 1.8 0 0 0 2.5 2.5l5.8-5.8a4 4 0 0 0 5.4-5.4l-2.4 2.4-2.3-.5-.5-2.3z"/></svg></span><span style="font-weight:800;font-size:22px">DevFix</span></a>
+<nav style="display:flex;gap:4px;flex-wrap:wrap" aria-label="لوحة العميل"><a class="tab" routerLink="/tracking">لوحة التحكم</a><a class="tab" routerLink="/tracking">طلباتي</a><a class="tab on" href="#" (click)="$event.preventDefault()">أجهزتي</a><a class="tab" routerLink="/wallet">المحفظة</a><a class="tab" routerLink="/account">حسابي</a></nav>
+</div>
+<button class="btn btn-ghost" style="min-height:44px;width:44px;padding:0" aria-label="الإشعارات"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9a6 6 0 0 1 12 0c0 6 2.5 7 2.5 7h-17S6 15 6 9zM10 20a2 2 0 0 0 4 0"/></svg></button>
+</div>
+</header>
+
+<main class="wrap" style="padding-top:32px;padding-bottom:64px;display:flex;flex-direction:column;gap:24px">
+<div style="display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap">
+<div><h1 style="font-size:30px;font-weight:800">أجهزتي</h1><p style="color:var(--muted)">الجهاز الافتراضي يُختار تلقائياً عند إنشاء طلب صيانة جديد.</p></div>
+<button class="btn btn-primary" (click)="v.openAdd()">إضافة جهاز جديد</button>
+</div>
+
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:20px">
+@for (d of v.devices; track $index) {
+<article class="card" [attr.style]="'' + 'padding:24px;display:flex;flex-direction:column;gap:18px;border:2px solid ' + (d.border)">
+<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+<span style="width:56px;height:56px;border-radius:16px;background:var(--primary-soft);color:var(--primary);display:grid;place-items:center"><svg class="ico" style="width:28px;height:28px" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="d.icon"/></svg></span>
+@if (d.isDefault) {<span style="font-size:13px;font-weight:800;padding:4px 12px;border-radius:999px;background:var(--accent-soft);color:var(--accent)">الجهاز الافتراضي</span>}
+</div>
+<div><h2 style="font-size:20px;font-weight:800">{{d.name}}</h2><p style="color:var(--muted);font-size:14px">{{d.typeLabel}} · {{d.sub}}</p></div>
+<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:auto">
+<a class="btn btn-primary" style="flex:1 1 140px" routerLink="/wizard">اطلب صيانة</a>
+<button class="btn btn-ghost" style="flex:1 1 140px" (click)="d.makeDefault()" [disabled]="d.isDefault" [attr.aria-pressed]="d.pressed">{{d.defaultBtn}}</button>
+</div>
+</article>
+}
+</div>
+
+@if (v.open) {
+<div style="position:absolute;inset:0;background:rgba(10,12,40,.55);display:flex;justify-content:center;align-items:flex-start;padding:110px 16px 24px">
+<div role="dialog" aria-modal="true" aria-label="إضافة جهاز" class="card" style="width:100%;max-width:520px;padding:28px;display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;justify-content:space-between;align-items:center"><h2 style="font-size:22px;font-weight:800">إضافة جهاز جديد</h2><button class="btn btn-ghost" style="min-height:44px;width:44px;padding:0" (click)="v.closeAdd()" aria-label="إغلاق"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+<div><p style="font-weight:700;font-size:14px;margin-bottom:8px">نوع الجهاز</p>
+<div style="display:flex;gap:8px;flex-wrap:wrap">@for (t of v.types; track $index) {<button class="chip {{t.cls}}" (click)="t.pick()" [attr.aria-pressed]="t.pressed">{{t.label}}</button>}</div></div>
+<div style="display:flex;flex-direction:column;gap:6px"><label for="brand">الماركة</label><input id="brand" class="input" type="text" placeholder="مثال: Apple" (change)="v.setBrand($event)"></div>
+<div style="display:flex;flex-direction:column;gap:6px"><label for="model">الموديل</label><input id="model" class="input" type="text" placeholder="مثال: iPhone 13" (change)="v.setModel($event)"></div>
+<div style="display:flex;flex-direction:column;gap:6px"><label for="imei">الرقم التسلسلي / IMEI (اختياري)</label><input id="imei" class="input" type="text" dir="ltr" placeholder="••••••••••••" (change)="v.setImei($event)"></div>
+<p style="font-size:13px;color:var(--muted)">{{v.firstNote}}</p>
+<button class="btn btn-primary" style="min-height:52px" (click)="v.addDevice()">حفظ الجهاز</button>
+</div>
+</div>
+}
+</main>
+<app-demo-nav></app-demo-nav>
+</div>

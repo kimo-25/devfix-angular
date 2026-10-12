@@ -1,0 +1,67 @@
+<div class="dx {{v.themeClass}}" dir="rtl">
+<header style="border-bottom:1px solid var(--line);background:var(--surface)">
+<div class="wrap" style="display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:72px">
+<a routerLink="/" style="display:flex;align-items:center;gap:10px"><span style="width:36px;height:36px;border-radius:10px;background:var(--primary);color:var(--on-primary);display:grid;place-items:center"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3.5 17.5a1.8 1.8 0 0 0 2.5 2.5l5.8-5.8a4 4 0 0 0 5.4-5.4l-2.4 2.4-2.3-.5-.5-2.3z"/></svg></span><span style="font-weight:800;font-size:22px">DevFix</span></a>
+<a class="btn btn-ghost" style="min-height:44px" routerLink="/devices">إلغاء والعودة</a>
+</div>
+</header>
+
+<main class="wrap" style="padding-top:32px;padding-bottom:64px;display:flex;flex-direction:column;gap:24px">
+<h1 style="font-size:30px;font-weight:800">طلب صيانة جديد</h1>
+
+<ol style="list-style:none;margin:0;padding:0;display:flex;gap:12px;flex-wrap:wrap" aria-label="خطوات الطلب">
+@for (s of v.stepper; track $index) {<li style="display:flex;align-items:center;gap:10px;flex:1 1 200px"><span class="sdot {{s.cls}}">{{s.n}}</span><span [attr.style]="'' + 'font-weight:700;color:' + (s.color)">{{s.label}}</span></li>}
+</ol>
+
+<div style="display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start">
+<section class="card" style="flex:999 1 560px;min-width:0;padding:28px;display:flex;flex-direction:column;gap:20px">
+
+@if (v.s1) {
+<div><h2 style="font-size:22px;font-weight:800">اختر الجهاز</h2><p style="color:var(--muted)">اخترنا جهازك الافتراضي، ويمكنك تغييره.</p></div>
+<div style="display:flex;flex-direction:column;gap:12px">@for (d of v.devices; track $index) {
+<button class="opt {{d.cls}}" (click)="d.pick()" [attr.aria-pressed]="d.pressed"><span style="display:flex;align-items:center;gap:14px"><svg class="ico" style="width:28px;height:28px;color:var(--primary)" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="d.icon"/></svg><span>{{d.name}}<br><span style="font-weight:600;font-size:13px;color:var(--muted)">{{d.sub}}</span></span></span><span style="font-size:13px;color:var(--accent);font-weight:800">{{d.badge}}</span></button>
+}</div>
+}
+
+@if (v.s2) {
+<div><h2 style="font-size:22px;font-weight:800">ما قسم العطل؟</h2><p style="color:var(--muted)">يصل طلبك للمحلات المتخصصة في هذا القسم فقط.</p></div>
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px">@for (i of v.issues; track $index) {
+<button class="opt {{i.cls}}" style="min-height:60px" (click)="i.pick()" [attr.aria-pressed]="i.pressed">{{i.label}}</button>
+}</div>
+}
+
+@if (v.s3) {
+<div><h2 style="font-size:22px;font-weight:800">صف العطل وأرفق صوراً</h2><p style="color:var(--muted)">كلما كان الوصف أوضح، كانت العروض أدق.</p></div>
+<div style="display:flex;flex-direction:column;gap:6px"><label for="desc" style="font-weight:700;font-size:14px">وصف العطل</label><textarea id="desc" rows="5" placeholder="متى بدأ العطل؟ هل سقط الجهاز؟ ماذا يحدث بالضبط؟" style="border-radius:12px;border:1px solid var(--line);background:var(--bg);color:var(--ink);padding:14px;font:600 15px 'Cairo',sans-serif;resize:vertical"></textarea></div>
+<div><p style="font-weight:700;font-size:14px;margin-bottom:8px">صور توضيحية (اختياري)</p>
+<div style="display:flex;gap:12px;flex-wrap:wrap"><button class="slot"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>إضافة صورة</button><button class="slot"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>إضافة صورة</button><button class="slot"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>إضافة صورة</button></div></div>
+}
+
+@if (v.s4) {
+<div style="text-align:center;display:flex;flex-direction:column;gap:14px;align-items:center;padding:24px 0">
+<span style="width:72px;height:72px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center"><svg class="ico" style="width:36px;height:36px" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span>
+<h2 style="font-size:26px;font-weight:800">أُرسل طلبك للمحلات المتخصصة</h2>
+<p style="color:var(--muted);max-width:420px">حالة الطلب الآن «قيد استقبال العروض». سيصلك إشعار فور وصول أول عرض.</p>
+<a class="btn btn-primary" routerLink="/bids">شاهد العروض الواردة</a>
+</div>
+}
+
+@if (v.showNav) {
+<div style="display:flex;justify-content:space-between;gap:12px;border-top:1px solid var(--line);padding-top:20px">
+<button class="btn btn-ghost" (click)="v.prev()" [disabled]="v.noPrev">السابق</button>
+<button class="btn btn-primary" (click)="v.next()">{{v.nextLabel}}</button>
+</div>
+}
+</section>
+
+<aside class="card" style="flex:1 1 280px;max-width:360px;min-width:0;padding:24px">
+<h2 style="font-size:18px;font-weight:800;margin-bottom:6px">ملخص الطلب</h2>
+<div class="row" style="border-top:0"><span style="color:var(--muted)">الجهاز</span><b>{{v.sumDevice}}</b></div>
+<div class="row"><span style="color:var(--muted)">قسم العطل</span><b>{{v.sumIssue}}</b></div>
+<div class="row"><span style="color:var(--muted)">الحالة بعد الإرسال</span><b>قيد استقبال العروض</b></div>
+<p style="font-size:13px;color:var(--muted);margin-top:10px">يبدأ العداد التنازلي فقط بعد قبول عرض وتأكيد كود الإيداع، وليس بعد إرسال الطلب.</p>
+</aside>
+</div>
+</main>
+<app-demo-nav></app-demo-nav>
+</div>

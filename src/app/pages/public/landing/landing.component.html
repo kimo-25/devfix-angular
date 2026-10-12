@@ -1,0 +1,202 @@
+<div class="dx {{v.themeClass}}" dir="rtl">
+
+<!-- NAV -->
+<header style="border-bottom:1px solid var(--line);background:var(--surface)">
+<div class="wrap" style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;min-height:76px">
+<a href="#top" style="display:flex;align-items:center;gap:10px">
+<span style="width:40px;height:40px;border-radius:12px;background:var(--primary);color:var(--on-primary);display:grid;place-items:center">
+<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3.5 17.5a1.8 1.8 0 0 0 2.5 2.5l5.8-5.8a4 4 0 0 0 5.4-5.4l-2.4 2.4-2.3-.5-.5-2.3z"/></svg>
+</span>
+<span style="font-weight:800;font-size:24px">DevFix</span>
+</a>
+<nav style="display:flex;gap:24px;flex-wrap:wrap" aria-label="التنقل الرئيسي">
+<a class="navlink" href="#how">كيف تعمل المنصة</a>
+<a class="navlink" href="#features">المميزات</a>
+<a class="navlink" href="#devices">الأجهزة</a>
+<a class="navlink" href="#centers">للمحلات</a>
+</nav>
+<div style="display:flex;gap:10px;flex-wrap:wrap">
+<a class="btn btn-ghost" routerLink="/auth">تسجيل الدخول</a>
+<a class="btn btn-primary" routerLink="/auth">أنشئ حساب</a>
+</div>
+</div>
+</header>
+
+<!-- HERO -->
+<section id="top" style="padding:72px 0 56px">
+<div class="wrap" style="display:flex;flex-wrap:wrap;gap:48px;align-items:center">
+<div style="flex:1 1 460px;min-width:0;display:flex;flex-direction:column;gap:24px">
+<span class="eyebrow">سوق عروض صيانة الأجهزة</span>
+<h1 style="font-size:56px;line-height:1.2;font-weight:800">محلات الصيانة تتنافس<br>على جهازك، <span style="color:var(--primary)">وأنت تختار.</span></h1>
+<p style="font-size:19px;color:var(--muted);max-width:520px">ارفع طلبك مرة واحدة، يصل لكل المحلات المتخصصة، وتستقبل عروضاً بالسعر والمدة وتقييم المحل في مكان واحد. دفع من المحفظة فقط، وتعويض تلقائي إذا تأخر المحل.</p>
+<div style="display:flex;gap:12px;flex-wrap:wrap">
+<a class="btn btn-primary" routerLink="/wizard" style="min-height:56px;font-size:18px;padding:0 32px">أنشئ طلب صيانة الآن</a>
+<a class="btn btn-ghost" href="#how" style="min-height:56px;font-size:18px">شاهد كيف تعمل</a>
+</div>
+<div style="display:flex;gap:20px;flex-wrap:wrap;color:var(--muted);font-weight:600;font-size:15px">
+<span style="display:flex;align-items:center;gap:6px"><svg class="ico" style="width:20px;height:20px;color:var(--accent)" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>بدون دفع نقدي</span>
+<span style="display:flex;align-items:center;gap:6px"><svg class="ico" style="width:20px;height:20px;color:var(--accent)" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>تتبع لحظي بعداد تنازلي</span>
+<span style="display:flex;align-items:center;gap:6px"><svg class="ico" style="width:20px;height:20px;color:var(--accent)" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>ضمان مركزي</span>
+</div>
+</div>
+
+<!-- interactive device selector preview -->
+<div class="card" style="flex:1 1 420px;min-width:0;max-width:560px;padding:24px;display:flex;flex-direction:column;gap:18px;box-shadow:0 24px 60px rgba(40,44,120,.14)">
+<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+<h2 style="font-size:20px;font-weight:700">طلب صيانة جديد</h2>
+<span style="font-size:13px;font-weight:700;padding:4px 12px;border-radius:999px;background:var(--primary-soft);color:var(--primary)">معاينة تفاعلية · بيانات توضيحية</span>
+</div>
+<div role="group" aria-label="اختر نوع الجهاز" style="display:flex;gap:8px;flex-wrap:wrap">
+@for (d of v.devices; track $index) {
+<button class="chip {{d.cls}}" (click)="d.pick()" [attr.aria-pressed]="d.pressed">{{d.label}}</button>
+}
+</div>
+<div>
+<p style="font-size:14px;font-weight:600;color:var(--muted);margin-bottom:8px">ما العطل؟</p>
+<div style="display:flex;gap:8px;flex-wrap:wrap">
+@for (i of v.issues; track $index) {
+<span style="padding:8px 14px;border-radius:10px;background:var(--bg);border:1px solid var(--line);font-weight:600;font-size:14px">{{i}}</span>
+}
+</div>
+</div>
+<div style="border-top:1px dashed var(--line);padding-top:16px;display:flex;flex-direction:column;gap:10px">
+<div style="display:flex;justify-content:space-between;align-items:center">
+<a routerLink="/bids" style="font-weight:700;text-decoration:underline">العروض الواردة — شاهد المقارنة الكاملة</a>
+<span style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:var(--accent)"><span style="width:8px;height:8px;border-radius:50%;background:var(--accent)"></span>مباشر</span>
+</div>
+@for (b of v.sampleBids; track $index) {
+<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border-radius:14px;background:var(--bg);border:1px solid var(--line)">
+<div style="min-width:0">
+<p style="font-weight:700;font-size:15px">{{b.name}}</p>
+<p style="font-size:13px;color:var(--muted)">{{b.meta}}</p>
+</div>
+<p style="font-weight:800;font-size:18px;white-space:nowrap">{{b.price}} <span style="font-size:13px;font-weight:600;color:var(--muted)">جنيه</span></p>
+</div>
+}
+</div>
+</div>
+</div>
+</section>
+
+<!-- LIVE STATS -->
+<section aria-label="أرقام المنصة" style="padding:0 0 64px">
+<div class="wrap">
+<div class="card" style="padding:28px 32px;display:flex;flex-wrap:wrap;gap:24px;justify-content:space-between">
+<div style="flex:1 1 200px"><p style="font-size:34px;font-weight:800;color:var(--primary)">[ عدد ]</p><p style="color:var(--muted);font-weight:600">محل صيانة موثّق نشط</p></div>
+<div style="flex:1 1 200px"><p style="font-size:34px;font-weight:800;color:var(--primary)">[ عدد ]</p><p style="color:var(--muted);font-weight:600">عملية صيانة مكتملة</p></div>
+<div style="flex:1 1 200px"><p style="font-size:34px;font-weight:800;color:var(--primary)">[ % ]</p><p style="color:var(--muted);font-weight:600">رضا العملاء (التقييم الهجين)</p></div>
+<div style="flex:1 1 200px"><p style="font-size:34px;font-weight:800;color:var(--primary)">[ ساعات ]</p><p style="color:var(--muted);font-weight:600">متوسط التوفير في مدة الإصلاح</p></div>
+</div>
+</div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section id="how" style="padding:48px 0 72px">
+<div class="wrap" style="display:flex;flex-direction:column;gap:40px">
+<div style="max-width:620px;display:flex;flex-direction:column;gap:12px">
+<span class="eyebrow">كيف تعمل المنصة</span>
+<h2 style="font-size:40px;line-height:1.3;font-weight:800">ثلاث خطوات من العطل إلى الجهاز السليم</h2>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:20px">
+<div class="card" style="flex:1 1 300px;padding:28px;display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;justify-content:space-between;align-items:center">
+<span style="width:52px;height:52px;border-radius:16px;background:var(--primary-soft);color:var(--primary);display:grid;place-items:center"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/></svg></span>
+<span style="font-size:48px;font-weight:800;color:var(--line)">١</span>
+</div>
+<h3 style="font-size:22px;font-weight:700">ارفع طلبك</h3>
+<p style="color:var(--muted)">اختر جهازك من قائمتك، حدّد قسم العطل، اكتب الوصف وأرفق صوراً. يصل الطلب فوراً لكل المحلات المتخصصة.</p>
+</div>
+<div class="card" style="flex:1 1 300px;padding:28px;display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;justify-content:space-between;align-items:center">
+<span style="width:52px;height:52px;border-radius:16px;background:var(--primary-soft);color:var(--primary);display:grid;place-items:center"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h12M4 12h16M4 17h9"/><circle cx="19" cy="7" r="1.5"/></svg></span>
+<span style="font-size:48px;font-weight:800;color:var(--line)">٢</span>
+</div>
+<h3 style="font-size:22px;font-weight:700">قارن العروض</h3>
+<p style="color:var(--muted)">السعر والمدة وتقييم المحل ونسبة الالتزام بالمواعيد جنباً إلى جنب. اختر الأنسب واختر الاستلام الشخصي أو التوصيل.</p>
+</div>
+<div class="card" style="flex:1 1 300px;padding:28px;display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;justify-content:space-between;align-items:center">
+<span style="width:52px;height:52px;border-radius:16px;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9.5 2.5h5"/></svg></span>
+<span style="font-size:48px;font-weight:800;color:var(--line)">٣</span>
+</div>
+<h3 style="font-size:22px;font-weight:700">تابع وادفع بأمان</h3>
+<p style="color:var(--muted)">عداد تنازلي لحظي ومراحل واضحة. تسلّم جهازك بكود OTP، ويُخصم المبلغ من محفظتك بعد أي تعويض مستحق.</p>
+</div>
+</div>
+</div>
+</section>
+
+<!-- FEATURES -->
+<section id="features" style="padding:72px 0;background:var(--surface);border-block:1px solid var(--line)">
+<div class="wrap" style="display:flex;flex-direction:column;gap:40px">
+<div style="max-width:620px;display:flex;flex-direction:column;gap:12px">
+<span class="eyebrow">لماذا DevFix</span>
+<h2 style="font-size:40px;line-height:1.3;font-weight:800">الثقة مبنية في النظام، لا في الوعود</h2>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:20px">
+<div style="flex:1 1 calc(50% - 20px);min-width:300px;padding:28px;border-radius:20px;background:var(--bg);display:flex;gap:20px;align-items:flex-start">
+<span style="flex:none;width:52px;height:52px;border-radius:16px;background:var(--primary-soft);color:var(--primary);display:grid;place-items:center"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/></svg></span>
+<div><h3 style="font-size:20px;font-weight:700;margin-bottom:6px">تقييم هجين عادل</h3><p style="color:var(--muted)">٥٠٪ من رأي العميل بالنجوم، و٥٠٪ التزام فعلي بالمواعيد يحسبه النظام تلقائياً. لا مجال للتقييمات العاطفية أو الكيدية.</p></div>
+</div>
+<div style="flex:1 1 calc(50% - 20px);min-width:300px;padding:28px;border-radius:20px;background:var(--bg);display:flex;gap:20px;align-items:flex-start">
+<span style="flex:none;width:52px;height:52px;border-radius:16px;background:var(--primary-soft);color:var(--primary);display:grid;place-items:center"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="3"/><path d="M3 10h18M16 15h2"/></svg></span>
+<div><h3 style="font-size:20px;font-weight:700;margin-bottom:6px">محفظة بدون كاش</h3><p style="color:var(--muted)">يُحجز مبلغ العرض في محفظتك عند القبول ولا يصل للمحل إلا بعد تأكيد الاستلام بكود OTP. كل حركة موثّقة في سجل واحد.</p></div>
+</div>
+<div style="flex:1 1 calc(50% - 20px);min-width:300px;padding:28px;border-radius:20px;background:var(--bg);display:flex;gap:20px;align-items:flex-start">
+<span style="flex:none;width:52px;height:52px;border-radius:16px;background:var(--warn-soft);color:var(--warn);display:grid;place-items:center"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8v5l3 2"/><circle cx="12" cy="13" r="8"/><path d="M5 3 3 5M19 3l2 2"/></svg></span>
+<div><h3 style="font-size:20px;font-weight:700;margin-bottom:6px">تعويض تلقائي عن التأخير</h3><p style="color:var(--muted)">مهلة إنذار تساوي ٢٠٪ من مدة الإصلاح (بحد أقصى ٢٤ ساعة). إذا تجاوزها المحل يُرد لمحفظتك ٥٪ من قيمة الطلب دون أن تطلب.</p></div>
+</div>
+<div style="flex:1 1 calc(50% - 20px);min-width:300px;padding:28px;border-radius:20px;background:var(--bg);display:flex;gap:20px;align-items:flex-start">
+<span style="flex:none;width:52px;height:52px;border-radius:16px;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4.5 6v5.5c0 4.5 3.2 8 7.5 9.5 4.3-1.5 7.5-5 7.5-9.5V6z"/><path d="m9 12 2.2 2.2L15.5 10"/></svg></span>
+<div><h3 style="font-size:20px;font-weight:700;margin-bottom:6px">ضمان مركزي ومطالبات</h3><p style="color:var(--muted)">مدة الضمان تظهر لكل عملية صيانة، وتقدّم المطالبة من حسابك ويراجعها فريق المنصة بدلاً من الاعتماد على كلمة المحل.</p></div>
+</div>
+</div>
+<div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px;padding:24px 28px;border-radius:20px;background:var(--primary-soft);color:var(--ink)">
+<div><h3 style="font-size:20px;font-weight:700">توكنز الولاء</h3><p style="color:var(--muted)">توكن واحد عن كل ١٠٠ جنيه تدفعها، وعند ١٠ توكنز تختار خصم ١٠٪ على طلبك التالي.</p></div>
+<a class="btn btn-primary" routerLink="/wizard">ابدأ بتجميع التوكنز</a>
+</div>
+</div>
+</section>
+
+<!-- CATEGORIES -->
+<section id="devices" style="padding:72px 0">
+<div class="wrap" style="display:flex;flex-direction:column;gap:40px">
+<div style="max-width:620px;display:flex;flex-direction:column;gap:12px">
+<span class="eyebrow">فئات الأجهزة</span>
+<h2 style="font-size:40px;line-height:1.3;font-weight:800">أي جهاز تحتاج إصلاحه؟</h2>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:20px">
+<a routerLink="/wizard" class="card" style="flex:1 1 240px;padding:28px;display:flex;flex-direction:column;gap:16px"><span style="width:60px;height:60px;border-radius:18px;background:var(--primary-soft);color:var(--primary);display:grid;place-items:center"><svg class="ico" style="width:30px;height:30px" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/></svg></span><h3 style="font-size:22px;font-weight:700">موبايل</h3><p style="color:var(--muted)">شاشات، بطاريات، شحن، كاميرا، برمجيات.</p></a>
+<a routerLink="/wizard" class="card" style="flex:1 1 240px;padding:28px;display:flex;flex-direction:column;gap:16px"><span style="width:60px;height:60px;border-radius:18px;background:var(--primary-soft);color:var(--primary);display:grid;place-items:center"><svg class="ico" style="width:30px;height:30px" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2.5"/><path d="M11 17.5h2"/></svg></span><h3 style="font-size:22px;font-weight:700">تابلت</h3><p style="color:var(--muted)">شاشات اللمس، الشحن، الأداء والتحديثات.</p></a>
+<a routerLink="/wizard" class="card" style="flex:1 1 240px;padding:28px;display:flex;flex-direction:column;gap:16px"><span style="width:60px;height:60px;border-radius:18px;background:var(--primary-soft);color:var(--primary);display:grid;place-items:center"><svg class="ico" style="width:30px;height:30px" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="11" rx="2"/><path d="M2 19h20"/></svg></span><h3 style="font-size:22px;font-weight:700">لابتوب</h3><p style="color:var(--muted)">لوحات المفاتيح، الشاشات، التبريد، اللوحة الأم.</p></a>
+<a routerLink="/wizard" class="card" style="flex:1 1 240px;padding:28px;display:flex;flex-direction:column;gap:16px"><span style="width:60px;height:60px;border-radius:18px;background:var(--primary-soft);color:var(--primary);display:grid;place-items:center"><svg class="ico" style="width:30px;height:30px" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="12" rx="2"/><path d="M9 21h6M12 15v6"/></svg></span><h3 style="font-size:22px;font-weight:700">PC</h3><p style="color:var(--muted)">تجميع، كروت الشاشة، مصادر الطاقة، التبريد.</p></a>
+</div>
+</div>
+</section>
+
+<!-- CENTER CTA -->
+<section id="centers" style="padding:0 0 72px">
+<div class="wrap">
+<div style="border-radius:28px;background:var(--deep);color:var(--on-deep);padding:56px 48px;display:flex;flex-wrap:wrap;gap:32px;align-items:center;justify-content:space-between">
+<div style="flex:1 1 420px;display:flex;flex-direction:column;gap:12px;max-width:640px">
+<span style="font-weight:700;font-size:14px;color:var(--accent)">لأصحاب محلات الصيانة</span>
+<h2 style="font-size:36px;line-height:1.3;font-weight:800">اربح عملاء جدداً، وتنافس بجودتك لا بمعارفك</h2>
+<p style="opacity:.8;font-size:17px">يصلك إشعار بكل طلب يخص تخصصك، تقدّم عرضك، وتُحوَّل أرباحك لمحفظتك فور تأكيد التسليم بعد عمولة المنصة.</p>
+</div>
+<a class="btn" routerLink="/center/register" style="background:var(--accent);color:var(--on-accent);min-height:56px;font-size:18px;padding:0 32px">انضم كمحل صيانة موثّق</a>
+</div>
+</div>
+</section>
+
+<!-- FOOTER -->
+<footer style="border-top:1px solid var(--line);background:var(--surface);padding:40px 0">
+<div class="wrap" style="display:flex;flex-wrap:wrap;gap:32px;justify-content:space-between">
+<div style="flex:1 1 260px;display:flex;flex-direction:column;gap:10px"><span style="font-weight:800;font-size:22px">DevFix</span><p style="color:var(--muted);max-width:320px">سوق عروض لصيانة الموبايل والتابلت واللابتوب وأجهزة PC.</p></div>
+<div style="display:flex;flex-direction:column;gap:6px"><p style="font-weight:700">المنصة</p><a class="navlink" href="#how">كيف تعمل</a><a class="navlink" href="#features">المميزات</a><a class="navlink" href="#devices">الأجهزة</a></div>
+<div style="display:flex;flex-direction:column;gap:6px"><p style="font-weight:700">للمحلات</p><a class="navlink" routerLink="/center/register">الانضمام والتحقق</a><a class="navlink" href="#top">سياسة العمولة</a></div>
+<div style="display:flex;flex-direction:column;gap:6px"><p style="font-weight:700">الدعم</p><a class="navlink" href="#top">الضمان والمطالبات</a><a class="navlink" href="#top">الشروط والخصوصية</a></div>
+</div>
+</footer>
+
+<app-demo-nav></app-demo-nav>
+</div>

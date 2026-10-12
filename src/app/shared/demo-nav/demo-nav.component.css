@@ -1,0 +1,12 @@
+:host { display: block; }
+.dn{font-family:'Cairo','Tajawal',system-ui,sans-serif;position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:9999;display:flex;flex-direction:column;align-items:center;gap:10px;direction:rtl}
+.dn *{box-sizing:border-box}
+.dn .fab{display:inline-flex;align-items:center;gap:10px;min-height:48px;padding:0 22px;border-radius:999px;border:0;background:#12163A;color:#fff;font:700 15px 'Cairo',sans-serif;cursor:pointer;box-shadow:0 10px 30px rgba(10,12,40,.4)}
+.dn .panel{width:min(400px,92vw);max-height:440px;overflow:auto;background:#fff;color:#12163A;border:1px solid #E1E4F1;border-radius:20px;padding:16px;box-shadow:0 20px 50px rgba(10,12,40,.35);display:flex;flex-direction:column;gap:14px}
+.dn .g{font-size:12px;font-weight:800;color:#575D7E;margin:0 0 6px}
+.dn .links{display:flex;flex-wrap:wrap;gap:6px}
+.dn a{display:inline-flex;align-items:center;min-height:40px;padding:0 14px;border-radius:999px;background:#ECEDFE;color:#2B2FB0;font-weight:700;font-size:14px;text-decoration:none}
+.dn a:hover{background:#3A3FD6;color:#fff}
+
+.dn .bar{display:flex;gap:8px}
+.dn .fab.alt{background:#fff;color:#12163A;border:1px solid #E1E4F1}

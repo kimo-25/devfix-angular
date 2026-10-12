@@ -1,0 +1,64 @@
+<div class="dx {{v.themeClass}}" dir="rtl">
+<header style="border-bottom:1px solid var(--line);background:var(--surface)">
+<div class="wrap" style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;min-height:72px">
+<div style="display:flex;align-items:center;gap:24px;flex-wrap:wrap">
+<a routerLink="/" style="display:flex;align-items:center;gap:10px"><span style="width:36px;height:36px;border-radius:10px;background:var(--primary);color:var(--on-primary);display:grid;place-items:center"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3.5 17.5a1.8 1.8 0 0 0 2.5 2.5l5.8-5.8a4 4 0 0 0 5.4-5.4l-2.4 2.4-2.3-.5-.5-2.3z"/></svg></span><span style="font-weight:800;font-size:22px">DevFix</span><span style="font-size:13px;font-weight:700;padding:2px 10px;border-radius:999px;background:var(--accent-soft);color:var(--accent)">للمحلات</span></a>
+<nav style="display:flex;gap:4px;flex-wrap:wrap" aria-label="لوحة المحل"><a class="tab" routerLink="/center/feed">سوق الطلبات</a><a class="tab" routerLink="/center/jobs">الطلبات الجارية</a><a class="tab on" href="#" (click)="$event.preventDefault()">المحفظة والأداء</a></nav>
+</div>
+<span style="display:flex;align-items:center;gap:8px;font-weight:700"><span [attr.style]="'' + 'width:10px;height:10px;border-radius:50%;background:' + (v.dotColor)"></span>مركز النخبة · {{v.statusShort}}</span>
+</div>
+</header>
+
+<main class="wrap" style="padding-top:32px;padding-bottom:64px;display:flex;flex-direction:column;gap:24px">
+
+@if (v.banned) {
+<div role="alert" style="display:flex;gap:14px;align-items:center;padding:18px 22px;border-radius:18px;background:var(--danger-soft);color:var(--danger)"><svg class="ico" style="flex:none;width:28px;height:28px" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg><div><p style="font-weight:800">حسابك محظور مؤقتاً من استقبال الطلبات الجديدة</p><p style="font-size:14px">تجاوزت مهلة الإنذار ٣ مرات خلال ٣٠ يوماً. ينتهي الحظر بعد ٧ أيام تلقائياً، ولا يمكنك فكه بنفسك. الطلبات الجارية تستمر كالمعتاد.</p></div></div>
+}
+
+<h1 style="font-size:30px;font-weight:800">المحفظة والأداء</h1>
+
+<div style="display:flex;flex-wrap:wrap;gap:24px;align-items:stretch">
+<section style="flex:1 1 520px;min-width:0;border-radius:24px;background:var(--hero);color:#fff;padding:32px;display:flex;flex-direction:column;gap:20px">
+<div><p style="font-weight:600;opacity:.8">الرصيد القابل للسحب</p><p style="font-size:56px;font-weight:800;line-height:1.15">٣٬٤٢٠ <span style="font-size:20px;font-weight:600;opacity:.8">جنيه</span></p></div>
+<div style="display:flex;flex-wrap:wrap;gap:16px">
+<div style="flex:1 1 180px;padding:14px 18px;border-radius:16px;background:rgba(255,255,255,.12)"><p style="font-size:14px;opacity:.85">قيد المعالجة (طلبات سحب)</p><p style="font-size:22px;font-weight:800">{{v.pendingText}} جنيه</p></div>
+<div style="flex:1 1 180px;padding:14px 18px;border-radius:16px;background:rgba(255,255,255,.12)"><p style="font-size:14px;opacity:.85">غرامات مخصومة هذا الشهر</p><p style="font-size:22px;font-weight:800">٤٢٫٥ جنيه</p></div>
+</div>
+<p style="font-size:14px;opacity:.85">تُضاف الأرباح تلقائياً فور تأكيد التسليم بعد خصم عمولة المنصة ١٠٪.</p>
+</section>
+
+<section class="card" style="flex:1 1 380px;min-width:0;padding:28px;display:flex;flex-direction:column;gap:14px">
+<h2 style="font-size:20px;font-weight:800">طلب سحب</h2>
+<div style="display:flex;flex-direction:column;gap:6px"><label for="amt">المبلغ (جنيه)</label><input id="amt" class="input" type="number" min="0" dir="ltr" [value]="v.amount" (change)="v.setAmount($event)"></div>
+<div style="display:flex;flex-direction:column;gap:6px"><label for="dest">وجهة التحويل</label><select id="dest" class="input" style="font-size:16px"><option>حساب بنكي</option><option>محفظة إلكترونية</option></select></div>
+@if (v.overLimit) {<p style="color:var(--danger);font-weight:700;font-size:14px">المبلغ أكبر من الرصيد القابل للسحب.</p>}
+<button class="btn btn-primary" style="min-height:52px" (click)="v.withdraw()" [disabled]="v.overLimit">إرسال طلب السحب</button>
+<p style="font-size:13px;color:var(--muted)">يراجع موظف المنصة الطلب ويعتمده. تتابع حالته من السجل أدناه.</p>
+</section>
+</div>
+
+<!-- performance -->
+<section class="card" style="padding:28px;display:flex;flex-direction:column;gap:20px">
+<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><h2 style="font-size:22px;font-weight:800">الأداء ومؤشر الالتزام (SLA)</h2><span style="font-size:13px;font-weight:700;padding:4px 12px;border-radius:999px;background:var(--primary-soft);color:var(--primary)">بيانات توضيحية</span></div>
+<div style="display:flex;flex-wrap:wrap;gap:16px">
+<div class="kpi"><p style="font-size:13px;font-weight:700;color:var(--muted)">الالتزام بالمواعيد</p><p style="font-size:36px;font-weight:800;color:var(--accent)">٩٦٪</p></div>
+<div class="kpi"><p style="font-size:13px;font-weight:700;color:var(--muted)">التقييم الهجين</p><p style="font-size:36px;font-weight:800">٤٫٨ <span style="font-size:16px;color:var(--muted)">/ ٥</span></p><p style="font-size:12px;color:var(--muted)">٥٠٪ عملاء · ٥٠٪ التزام زمني</p></div>
+<div class="kpi"><p style="font-size:13px;font-weight:700;color:var(--muted)">عروض مقدمة · نسبة القبول</p><p style="font-size:36px;font-weight:800">٤٢ · ٣١٪</p></div>
+<div class="kpi"><p style="font-size:13px;font-weight:700;color:var(--muted)">متوسط وقت الإصلاح</p><p style="font-size:36px;font-weight:800">٢١ <span style="font-size:16px;color:var(--muted)">ساعة</span></p></div>
+</div>
+<div [attr.style]="'' + 'padding:20px 22px;border-radius:18px;background:' + (v.banBg) + ';display:flex;flex-wrap:wrap;gap:20px;align-items:center;justify-content:space-between'">
+<div><p style="font-size:13px;font-weight:700;color:var(--muted)">مرات تجاوز مهلة الإنذار خلال ٣٠ يوماً</p><p [attr.style]="'' + 'font-size:34px;font-weight:800;color:' + (v.banFg)">{{v.delaysText}} <span style="font-size:16px;font-weight:600;color:var(--muted)">من ٣</span></p></div>
+<div style="display:flex;gap:10px" role="img" [attr.aria-label]="'' + (v.delaysText) + ' من ٣ مخالفات'">@for (d of v.dots; track $index) {<span [attr.style]="'' + 'width:44px;height:14px;border-radius:99px;background:' + (d.bg)"></span>}</div>
+<div style="max-width:340px"><p [attr.style]="'' + 'font-weight:800;color:' + (v.banFg)">{{v.banTitle}}</p><p style="font-size:14px;color:var(--muted)">{{v.banText}}</p></div>
+</div>
+</section>
+
+<section class="card" style="padding:26px 28px">
+<h2 style="font-size:22px;font-weight:800;margin-bottom:8px">سجل الحركات المالية</h2>
+@for (t of v.txs; track $index) {
+<div class="row"><div><p style="font-weight:700">{{t.title}}</p><p style="font-size:13px;color:var(--muted)">{{t.sub}}</p></div><div style="display:flex;gap:14px;align-items:center"><span style="font-size:13px;font-weight:700;padding:2px 10px;border-radius:999px;background:var(--bg);color:var(--muted)">{{t.status}}</span><b [attr.style]="'' + 'min-width:110px;text-align:left;color:' + (t.color) + ';font-variant-numeric:tabular-nums'" dir="ltr">{{t.amount}}</b></div></div>
+}
+</section>
+</main>
+<app-demo-nav></app-demo-nav>
+</div>

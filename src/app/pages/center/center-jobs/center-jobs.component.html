@@ -1,0 +1,57 @@
+<div class="dx {{v.themeClass}}" dir="rtl">
+<header style="border-bottom:1px solid var(--line);background:var(--surface)">
+<div class="wrap" style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;min-height:72px">
+<div style="display:flex;align-items:center;gap:24px;flex-wrap:wrap">
+<a routerLink="/" style="display:flex;align-items:center;gap:10px"><span style="width:36px;height:36px;border-radius:10px;background:var(--primary);color:var(--on-primary);display:grid;place-items:center"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3.5 17.5a1.8 1.8 0 0 0 2.5 2.5l5.8-5.8a4 4 0 0 0 5.4-5.4l-2.4 2.4-2.3-.5-.5-2.3z"/></svg></span><span style="font-weight:800;font-size:22px">DevFix</span><span style="font-size:13px;font-weight:700;padding:2px 10px;border-radius:999px;background:var(--accent-soft);color:var(--accent)">للمحلات</span></a>
+<nav style="display:flex;gap:4px;flex-wrap:wrap" aria-label="لوحة المحل"><a class="tab" routerLink="/center/feed">سوق الطلبات</a><a class="tab on" href="#" (click)="$event.preventDefault()">الطلبات الجارية</a><a class="tab" routerLink="/center/wallet">المحفظة والأداء</a></nav>
+</div>
+<span style="display:flex;align-items:center;gap:8px;font-weight:700"><span style="width:10px;height:10px;border-radius:50%;background:var(--accent)"></span>مركز النخبة · نشط</span>
+</div>
+</header>
+
+<main class="wrap" style="padding-top:32px;padding-bottom:64px;display:flex;flex-direction:column;gap:24px">
+<div><h1 style="font-size:30px;font-weight:800">الطلبات الجارية</h1><p style="color:var(--muted)">الكود يُولَّد على جهاز العميل فقط ويمليه لك شفهياً. لا يمكنك توليده أو معرفته.</p></div>
+
+@for (j of v.jobs; track $index) {
+<article class="card" style="padding:26px 28px;display:flex;flex-direction:column;gap:20px">
+<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap">
+<div><h2 style="font-size:22px;font-weight:800">{{j.device}}</h2><p style="color:var(--muted);font-size:14px">{{j.issue}} · قيمة العرض {{j.price}} جنيه · {{j.delivery}}</p></div>
+<span [attr.style]="'' + 'font-weight:800;padding:6px 16px;border-radius:999px;background:' + (j.badgeBg) + ';color:' + (j.badgeFg)">{{j.badge}}</span>
+</div>
+
+@if (j.hasTimer) {
+<div style="display:flex;flex-wrap:wrap;gap:24px;align-items:center;justify-content:space-between;padding:16px 20px;border-radius:16px;background:var(--bg)">
+<div><p style="font-size:13px;font-weight:700;color:var(--muted)">{{j.timerLabel}}</p><p [attr.style]="'' + 'font-size:38px;font-weight:800;font-variant-numeric:tabular-nums;color:' + (j.timerColor)" dir="ltr">{{j.timer}}</p></div>
+<p style="font-size:14px;color:var(--muted);max-width:360px">مدة الإصلاح {{j.hours}} ساعة · مهلة الإنذار {{j.grace}} ساعة تحسبها المنصة. التسليم المتأخر بعد المهلة = خصم ٥٪ ومخالفة على سجلك.</p>
+</div>
+}
+
+@if (j.isAwaiting) {
+<div style="display:flex;flex-wrap:wrap;gap:16px;align-items:center"><div style="display:flex;flex-direction:column;gap:6px"><label [attr.for]="'' + 'in-' + (j.id)" style="font-weight:700;font-size:14px">كود إيداع الجهاز (٤ أرقام من العميل)</label><input [attr.id]="'' + 'in-' + (j.id)" class="otpin" type="text" inputmode="numeric" maxlength="4" placeholder="••••" dir="ltr" (change)="j.setCode($event)"></div>
+<button class="btn btn-accent" style="min-height:60px;margin-top:22px" (click)="j.confirmIn()">تأكيد الاستلام وبدء العداد</button></div>
+}
+
+@if (j.isDiagnosing) {<div><button class="btn btn-primary" (click)="j.toRepair()">انتهى التشخيص — ابدأ الإصلاح</button></div>}
+
+@if (j.isRepairing) {
+<div style="display:flex;gap:12px;flex-wrap:wrap"><button class="btn btn-accent" (click)="j.toReady()" [disabled]="j.frozen">تحديث الحالة: جاهز للتسليم</button><button class="btn btn-ghost" (click)="j.scope()" [disabled]="j.frozen">رفع طلب تعديل نطاق (عطل إضافي)</button></div>
+@if (j.frozen) {<p style="padding:12px 16px;border-radius:12px;background:var(--primary-soft);font-weight:700">أُرسل طلب التعديل. العداد متوقف بانتظار رد العميل.</p>}
+}
+
+@if (j.isReady) {
+<div style="display:flex;flex-wrap:wrap;gap:16px;align-items:center"><div style="display:flex;flex-direction:column;gap:6px"><label [attr.for]="'' + 'out-' + (j.id)" style="font-weight:700;font-size:14px">كود استلام الجهاز (٤ أرقام من العميل)</label><input [attr.id]="'' + 'out-' + (j.id)" class="otpin" type="text" inputmode="numeric" maxlength="4" placeholder="••••" dir="ltr" (change)="j.setCode($event)"></div>
+<button class="btn btn-accent" style="min-height:60px;margin-top:22px" (click)="j.confirmOut()">تأكيد التسليم وإغلاق الطلب</button></div>
+}
+
+@if (j.isDone) {
+<div style="max-width:460px"><p style="font-weight:800;color:var(--accent);margin-bottom:6px">اكتمل الطلب — فاتورة نهائية غير قابلة للتعديل</p>
+<div class="row"><span style="color:var(--muted)">قيمة العرض</span><b>{{j.price}} جنيه</b></div>
+<div class="row"><span style="color:var(--muted)">خصم التأخير</span><b>٠ جنيه</b></div>
+<div class="row"><span style="color:var(--muted)">عمولة المنصة (١٠٪)</span><b>− {{j.commission}} جنيه</b></div>
+<div class="row" style="font-size:18px"><b>صافي مستحقاتك</b><b style="color:var(--accent)">{{j.net}} جنيه</b></div></div>
+}
+</article>
+}
+</main>
+<app-demo-nav></app-demo-nav>
+</div>
