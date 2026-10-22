@@ -1,0 +1,129 @@
+/* src/styles.css */
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  font-family:
+    "Cairo",
+    Tahoma,
+    Arial,
+    sans-serif;
+  background: #f7f9fc;
+  color: #17233c;
+}
+body {
+  direction: rtl;
+}
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+a {
+  color: inherit;
+}
+::selection {
+  background: #dbe7ff;
+  color: #163d9c;
+}
+.dark-mode .page-wrap {
+  color: #e5eaf4;
+}
+.dark-mode .page-wrap .hero,
+.dark-mode .page-wrap .stat-card,
+.dark-mode .page-wrap .feature-card,
+.dark-mode .page-wrap .panel,
+.dark-mode .page-wrap .card,
+.dark-mode .page-wrap .table-card,
+.dark-mode .page-wrap .form-card,
+.dark-mode .page-wrap .center-card,
+.dark-mode .page-wrap .bid-card,
+.dark-mode .page-wrap .review-card,
+.dark-mode .page-wrap .device-card {
+  background: #111a2d !important;
+  border-color: #26334a !important;
+  color: #e5eaf4;
+}
+.dark-mode .page-wrap p,
+.dark-mode .page-wrap small,
+.dark-mode .page-wrap .muted {
+  color: #9baac3;
+}
+.dark-mode .page-wrap input,
+.dark-mode .page-wrap select,
+.dark-mode .page-wrap textarea {
+  background: #0d1628 !important;
+  border-color: #33415b !important;
+  color: #e5eaf4 !important;
+}
+.dark-mode .page-wrap th {
+  background: #172238 !important;
+  color: #c7d3e8;
+}
+.dark-mode .page-wrap td {
+  border-color: #26334a !important;
+  color: #d9e2f2;
+}
+.dark-mode .page-wrap h1,
+.dark-mode .page-wrap h2,
+.dark-mode .page-wrap h3 {
+  color: inherit;
+}
+.dark-mode .page-wrap > .page-heading h1 {
+  color: #fff !important;
+}
+.dark-mode .page-wrap .section-head h2 {
+  color: #fff !important;
+}
+.dark-mode .page-wrap .table-card table {
+  width: 100%;
+  border-collapse: collapse;
+  white-space: nowrap;
+}
+.dark-mode .page-wrap .table-card th,
+.dark-mode .page-wrap .table-card td {
+  padding: 14px 16px;
+  text-align: right;
+  border-bottom: 1px solid #26334a;
+}
+.dark-mode .page-wrap .table-card th {
+  background: #172238 !important;
+  color: #fff !important;
+  font-weight: 700;
+}
+.dark-mode .page-wrap .table-card td,
+.dark-mode .page-wrap .table-card td a:not(.status),
+.dark-mode .page-wrap .table-card td b {
+  color: #fff !important;
+}
+.dark-mode .page-wrap .table-card tbody tr:last-child td {
+  border-bottom: 0;
+}
+.dark-mode .page-wrap .table-card tbody tr:hover td {
+  background: #1b2940 !important;
+}
+.dark-mode .page-wrap .review-score {
+  background:
+    linear-gradient(
+      145deg,
+      #172238,
+      #111a2d) !important;
+  border-color: #33415b !important;
+}
+.dark-mode .page-wrap .review-score b {
+  color: #fff !important;
+}
+.dark-mode .page-wrap .review-score .rating {
+  color: #f5b942 !important;
+}
+
+/* angular:styles/global:styles */
+/*# sourceMappingURL=styles.css.map */
