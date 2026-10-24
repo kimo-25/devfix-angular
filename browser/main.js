@@ -54,6 +54,9 @@ function setActiveConsumer(consumer) {
 function getActiveConsumer() {
   return activeConsumer;
 }
+function isInNotificationPhase() {
+  return inNotificationPhase;
+}
 var REACTIVE_NODE = {
   version: 0,
   lastCleanEpoch: 0,
@@ -332,6 +335,73 @@ function signalValueChanged(node) {
   producerNotifyConsumers(node);
   postSignalSetFn?.();
 }
+function createWatch(fn, schedule, allowSignalWrites) {
+  const node = Object.create(WATCH_NODE);
+  if (allowSignalWrites) {
+    node.consumerAllowSignalWrites = true;
+  }
+  node.fn = fn;
+  node.schedule = schedule;
+  const registerOnCleanup = (cleanupFn) => {
+    node.cleanupFn = cleanupFn;
+  };
+  function isWatchNodeDestroyed(node2) {
+    return node2.fn === null && node2.schedule === null;
+  }
+  function destroyWatchNode(node2) {
+    if (!isWatchNodeDestroyed(node2)) {
+      consumerDestroy(node2);
+      node2.cleanupFn();
+      node2.fn = null;
+      node2.schedule = null;
+      node2.cleanupFn = NOOP_CLEANUP_FN;
+    }
+  }
+  const run = () => {
+    if (node.fn === null) {
+      return;
+    }
+    if (isInNotificationPhase()) {
+      throw new Error(`Schedulers cannot synchronously execute watches while scheduling.`);
+    }
+    node.dirty = false;
+    if (node.hasRun && !consumerPollProducersForChange(node)) {
+      return;
+    }
+    node.hasRun = true;
+    const prevConsumer = consumerBeforeComputation(node);
+    try {
+      node.cleanupFn();
+      node.cleanupFn = NOOP_CLEANUP_FN;
+      node.fn(registerOnCleanup);
+    } finally {
+      consumerAfterComputation(node, prevConsumer);
+    }
+  };
+  node.ref = {
+    notify: () => consumerMarkDirty(node),
+    run,
+    cleanup: () => node.cleanupFn(),
+    destroy: () => destroyWatchNode(node),
+    [SIGNAL]: node
+  };
+  return node.ref;
+}
+var NOOP_CLEANUP_FN = () => {
+};
+var WATCH_NODE = /* @__PURE__ */ (() => {
+  return __spreadProps(__spreadValues({}, REACTIVE_NODE), {
+    consumerIsAlwaysLive: true,
+    consumerAllowSignalWrites: false,
+    consumerMarkedDirty: (node) => {
+      if (node.schedule !== null) {
+        node.schedule(node.ref);
+      }
+    },
+    hasRun: false,
+    cleanupFn: NOOP_CLEANUP_FN
+  });
+})();
 
 // node_modules/rxjs/dist/esm/internal/util/isFunction.js
 function isFunction(value) {
@@ -12531,6 +12601,11 @@ function invokeAllTriggerCleanupFns(lDetails) {
   invokeTriggerCleanupFns(1, lDetails);
   invokeTriggerCleanupFns(0, lDetails);
 }
+function assertNotInReactiveContext(debugFn, extraContext) {
+  if (getActiveConsumer() !== null) {
+    throw new RuntimeError(-602, ngDevMode && `${debugFn.name}() cannot be called from within a reactive context.${extraContext ? ` ${extraContext}` : ""}`);
+  }
+}
 var AfterRenderPhase;
 (function(AfterRenderPhase2) {
   AfterRenderPhase2[AfterRenderPhase2["EarlyRead"] = 0] = "EarlyRead";
@@ -21619,6 +21694,53 @@ var ZoneAwareEffectScheduler = class {
     }
   }
 };
+var EffectHandle = class {
+  constructor(scheduler, effectFn, creationZone, destroyRef, injector, allowSignalWrites) {
+    this.scheduler = scheduler;
+    this.effectFn = effectFn;
+    this.creationZone = creationZone;
+    this.injector = injector;
+    this.watcher = createWatch((onCleanup) => this.runEffect(onCleanup), () => this.schedule(), allowSignalWrites);
+    this.unregisterOnDestroy = destroyRef?.onDestroy(() => this.destroy());
+  }
+  runEffect(onCleanup) {
+    try {
+      this.effectFn(onCleanup);
+    } catch (err) {
+      const errorHandler2 = this.injector.get(ErrorHandler, null, {
+        optional: true
+      });
+      errorHandler2?.handleError(err);
+    }
+  }
+  run() {
+    this.watcher.run();
+  }
+  schedule() {
+    this.scheduler.scheduleEffect(this);
+  }
+  destroy() {
+    this.watcher.destroy();
+    this.unregisterOnDestroy?.();
+  }
+};
+function effect(effectFn, options) {
+  performanceMarkFeature("NgSignals");
+  ngDevMode && assertNotInReactiveContext(effect, "Call `effect` outside of a reactive context. For example, schedule the effect inside the component constructor.");
+  !options?.injector && assertInInjectionContext(effect);
+  const injector = options?.injector ?? inject(Injector);
+  const destroyRef = options?.manualCleanup !== true ? injector.get(DestroyRef) : null;
+  const handle = new EffectHandle(injector.get(APP_EFFECT_SCHEDULER), effectFn, typeof Zone === "undefined" ? null : Zone.current, destroyRef, injector, options?.allowSignalWrites ?? false);
+  const cdr = injector.get(ChangeDetectorRef, null, {
+    optional: true
+  });
+  if (!cdr || !(cdr._lView[FLAGS] & 8)) {
+    handle.watcher.notify();
+  } else {
+    (cdr._lView[EFFECTS_TO_SCHEDULE] ??= []).push(handle.watcher.notify);
+  }
+  return handle;
+}
 function reflectComponentType(component) {
   const componentDef = getComponentDef(component);
   if (!componentDef) return null;
@@ -33865,7 +33987,7 @@ var AppComponent = class _AppComponent {
         \u0275\u0275advance();
         \u0275\u0275textInterpolate(ctx.darkMode ? "\u2600" : "\u263E");
       }
-    }, dependencies: [RouterOutlet, RouterLink, RouterLinkActive, NgForOf], styles: ["\n\n[_nghost-%COMP%] {\n  display: block;\n  min-height: 100vh;\n}\n.app-shell[_ngcontent-%COMP%] {\n  min-height: 100vh;\n}\n.sidebar[_ngcontent-%COMP%] {\n  position: fixed;\n  inset: 0 0 0 auto;\n  width: 260px;\n  background: #fff;\n  border-left: 1px solid #e8edf4;\n  z-index: 20;\n  display: flex;\n  flex-direction: column;\n  padding: 24px 16px;\n  overflow-y: auto;\n}\n.brand[_ngcontent-%COMP%] {\n  display: flex;\n  align-items: center;\n  gap: 11px;\n  text-decoration: none;\n  color: #14213d;\n  padding: 0 8px 27px;\n}\n.brand-mark[_ngcontent-%COMP%] {\n  display: grid;\n  place-items: center;\n  width: 43px;\n  height: 43px;\n  border-radius: 14px;\n  background: #2463eb;\n  color: white;\n  font-size: 25px;\n  font-weight: 800;\n  box-shadow: 0 7px 15px #2463eb30;\n}\n.brand[_ngcontent-%COMP%]   b[_ngcontent-%COMP%] {\n  display: block;\n  font-size: 20px;\n  letter-spacing: -.5px;\n}\n.brand[_ngcontent-%COMP%]   small[_ngcontent-%COMP%] {\n  display: block;\n  font-size: 9px;\n  letter-spacing: 1.4px;\n  color: #8a96aa;\n  margin-top: 2px;\n}\n.side-label[_ngcontent-%COMP%] {\n  font-size: 11px;\n  font-weight: 800;\n  color: #a0aabc;\n  padding: 13px 12px 8px;\n}\nnav[_ngcontent-%COMP%] {\n  display: grid;\n  gap: 4px;\n  margin-bottom: 8px;\n}\nnav[_ngcontent-%COMP%]   a[_ngcontent-%COMP%] {\n  display: flex;\n  align-items: center;\n  gap: 12px;\n  text-decoration: none;\n  color: #64718a;\n  padding: 11px 12px;\n  border-radius: 10px;\n  font-size: 13px;\n  font-weight: 600;\n  transition: .2s;\n}\nnav[_ngcontent-%COMP%]   a[_ngcontent-%COMP%]:hover {\n  background: #f4f7ff;\n  color: #245de0;\n}\nnav[_ngcontent-%COMP%]   a.active[_ngcontent-%COMP%] {\n  background: #eaf0ff;\n  color: #2159db;\n  font-weight: 800;\n}\n.nav-icon[_ngcontent-%COMP%] {\n  width: 22px;\n  text-align: center;\n  font-size: 17px;\n}\n.sidebar-bottom[_ngcontent-%COMP%] {\n  margin-top: auto;\n}\n.help-box[_ngcontent-%COMP%] {\n  background: #f1f5ff;\n  border: 1px solid #e4ebff;\n  border-radius: 14px;\n  padding: 15px;\n  margin: 15px 2px;\n}\n.help-icon[_ngcontent-%COMP%] {\n  display: grid;\n  place-items: center;\n  width: 30px;\n  height: 30px;\n  border-radius: 9px;\n  background: white;\n  color: #2864e8;\n  margin-bottom: 10px;\n}\n.help-box[_ngcontent-%COMP%]   b[_ngcontent-%COMP%] {\n  font-size: 12px;\n}\n.help-box[_ngcontent-%COMP%]   p[_ngcontent-%COMP%] {\n  font-size: 11px;\n  color: #77839a;\n  margin: 6px 0 10px;\n}\n.help-box[_ngcontent-%COMP%]   a[_ngcontent-%COMP%] {\n  font-size: 11px;\n  font-weight: 800;\n  color: #245de0;\n  text-decoration: none;\n}\n.help-primary[_ngcontent-%COMP%] {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  background: #e1eaff;\n  border-radius: 8px;\n  padding: 8px 10px;\n}\n.help-primary[_ngcontent-%COMP%]   span[_ngcontent-%COMP%] {\n  font-size: 14px;\n}\n.help-links[_ngcontent-%COMP%] {\n  display: grid;\n  grid-template-columns: repeat(2, minmax(0, 1fr));\n  gap: 5px 8px;\n  margin-top: 9px;\n}\n.help-links[_ngcontent-%COMP%]   a[_ngcontent-%COMP%] {\n  min-width: 0;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  border-radius: 6px;\n  padding: 5px 3px;\n  font-size: 9px;\n  text-align: center;\n}\n.help-links[_ngcontent-%COMP%]   a[_ngcontent-%COMP%]:hover {\n  background: #e1eaff;\n}\n.profile-mini[_ngcontent-%COMP%] {\n  display: flex;\n  align-items: center;\n  gap: 10px;\n  border-top: 1px solid #edf0f5;\n  padding: 17px 4px 0;\n}\n.avatar[_ngcontent-%COMP%], \n.top-avatar[_ngcontent-%COMP%] {\n  display: grid;\n  place-items: center;\n  background: #e9efff;\n  color: #245de0;\n  border: 0;\n  border-radius: 50%;\n  width: 37px;\n  height: 37px;\n  font-weight: 800;\n}\n.profile-mini[_ngcontent-%COMP%]   b[_ngcontent-%COMP%] {\n  display: block;\n  font-size: 12px;\n}\n.profile-mini[_ngcontent-%COMP%]   small[_ngcontent-%COMP%] {\n  font-size: 10px;\n  color: #9aa4b5;\n}\n.dots[_ngcontent-%COMP%] {\n  margin-right: auto;\n  color: #8994a6;\n}\n.main-area[_ngcontent-%COMP%] {\n  margin-right: 260px;\n  min-height: 100vh;\n  display: flex;\n  flex-direction: column;\n}\n.topbar[_ngcontent-%COMP%] {\n  height: 76px;\n  background: #fff;\n  border-bottom: 1px solid #e8edf4;\n  display: flex;\n  align-items: center;\n  padding: 0 34px;\n  gap: 15px;\n  position: sticky;\n  top: 0;\n  z-index: 10;\n}\n.crumb[_ngcontent-%COMP%] {\n  font-size: 12px;\n  color: #98a3b5;\n  display: flex;\n  align-items: center;\n  gap: 10px;\n}\n.crumb[_ngcontent-%COMP%]   b[_ngcontent-%COMP%] {\n  color: #35415a;\n}\n.crumb-sep[_ngcontent-%COMP%] {\n  color: #d0d6e0;\n}\n.top-actions[_ngcontent-%COMP%] {\n  margin-right: auto;\n  display: flex;\n  align-items: center;\n  gap: 15px;\n}\n.icon-btn[_ngcontent-%COMP%] {\n  position: relative;\n  border: 1px solid #e7ebf2;\n  background: #fff;\n  width: 38px;\n  height: 38px;\n  border-radius: 11px;\n  color: #65728a;\n  font-size: 19px;\n}\n.icon-btn[_ngcontent-%COMP%]   i[_ngcontent-%COMP%] {\n  position: absolute;\n  width: 6px;\n  height: 6px;\n  border-radius: 50%;\n  background: #f05a65;\n  top: 8px;\n  left: 8px;\n}\n.top-avatar[_ngcontent-%COMP%] {\n  width: 36px;\n  height: 36px;\n}\n.menu-btn[_ngcontent-%COMP%] {\n  display: none;\n  border: 0;\n  background: #f3f6fc;\n  border-radius: 9px;\n  padding: 8px 11px;\n}\nfooter[_ngcontent-%COMP%] {\n  margin-top: auto;\n  padding: 22px 34px;\n  color: #9ba5b5;\n  font-size: 10px;\n  display: flex;\n  justify-content: space-between;\n  gap: 12px;\n}\n.menu-btn[_ngcontent-%COMP%] {\n  cursor: pointer;\n}\n@media (max-width:900px) {\n  .sidebar[_ngcontent-%COMP%] {\n    transform: translateX(105%);\n    transition: transform .25s;\n    box-shadow: none;\n  }\n  .sidebar.open[_ngcontent-%COMP%] {\n    transform: translateX(0);\n    box-shadow: 0 0 0 999px #11182766;\n  }\n  .main-area[_ngcontent-%COMP%] {\n    margin-right: 0;\n  }\n  .menu-btn[_ngcontent-%COMP%] {\n    display: block;\n  }\n  .topbar[_ngcontent-%COMP%] {\n    padding: 0 18px;\n  }\n  footer[_ngcontent-%COMP%] {\n    padding: 18px;\n  }\n  .crumb[_ngcontent-%COMP%] {\n    font-size: 11px;\n  }\n}\n.top-search[_ngcontent-%COMP%] {\n  display: flex;\n  align-items: center;\n  gap: 9px;\n  border: 1px solid #e4e9f2;\n  background: #f8faff;\n  border-radius: 12px;\n  padding: 0 12px;\n  height: 39px;\n  min-width: 210px;\n  color: #8a96aa;\n}\n.top-search[_ngcontent-%COMP%]   span[_ngcontent-%COMP%] {\n  font-size: 22px;\n}\n.top-search[_ngcontent-%COMP%]   input[_ngcontent-%COMP%] {\n  width: 100%;\n  border: 0;\n  outline: 0;\n  background: transparent;\n  color: #25314a;\n  font-size: 12px;\n  min-width: 0;\n}\n.crumb-home[_ngcontent-%COMP%] {\n  font-weight: 800;\n  color: #245de0;\n}\n.top-actions[_ngcontent-%COMP%] {\n  gap: 10px;\n}\n.theme-toggle[_ngcontent-%COMP%] {\n  font-size: 21px;\n  cursor: pointer;\n  background: #f7f9ff;\n  color: #465574;\n}\n.notification-btn[_ngcontent-%COMP%] {\n  cursor: pointer;\n}\n.top-avatar[_ngcontent-%COMP%] {\n  cursor: pointer;\n  box-shadow: 0 0 0 4px #edf2ff;\n}\n.app-shell.dark-mode[_ngcontent-%COMP%] {\n  background: #0b1120;\n  color: #e5eaf4;\n  color-scheme: dark;\n}\n.dark-mode[_ngcontent-%COMP%]   .sidebar[_ngcontent-%COMP%], \n.dark-mode[_ngcontent-%COMP%]   .topbar[_ngcontent-%COMP%] {\n  background: #111a2d;\n  border-color: #26334a;\n}\n.dark-mode[_ngcontent-%COMP%]   .brand[_ngcontent-%COMP%] {\n  color: #f1f5ff;\n}\n.dark-mode[_ngcontent-%COMP%]   .brand[_ngcontent-%COMP%]   small[_ngcontent-%COMP%], \n.dark-mode[_ngcontent-%COMP%]   .side-label[_ngcontent-%COMP%], \n.dark-mode[_ngcontent-%COMP%]   .profile-mini[_ngcontent-%COMP%]   small[_ngcontent-%COMP%] {\n  color: #8492ad;\n}\n.dark-mode[_ngcontent-%COMP%]   nav[_ngcontent-%COMP%]   a[_ngcontent-%COMP%] {\n  color: #a9b6cd;\n}\n.dark-mode[_ngcontent-%COMP%]   nav[_ngcontent-%COMP%]   a[_ngcontent-%COMP%]:hover {\n  background: #1a2943;\n  color: #91b7ff;\n}\n.dark-mode[_ngcontent-%COMP%]   nav[_ngcontent-%COMP%]   a.active[_ngcontent-%COMP%] {\n  background: #1b3158;\n  color: #8db4ff;\n}\n.dark-mode[_ngcontent-%COMP%]   .help-box[_ngcontent-%COMP%] {\n  background: #17243c;\n  border-color: #283b60;\n}\n.dark-mode[_ngcontent-%COMP%]   .help-box[_ngcontent-%COMP%]   b[_ngcontent-%COMP%], \n.dark-mode[_ngcontent-%COMP%]   .profile-mini[_ngcontent-%COMP%]   b[_ngcontent-%COMP%] {\n  color: #e9efff;\n}\n.dark-mode[_ngcontent-%COMP%]   .help-box[_ngcontent-%COMP%]   p[_ngcontent-%COMP%] {\n  color: #a0aec6;\n}\n.dark-mode[_ngcontent-%COMP%]   .help-icon[_ngcontent-%COMP%] {\n  background: #223454;\n  color: #9bbcff;\n}\n.dark-mode[_ngcontent-%COMP%]   .main-area[_ngcontent-%COMP%] {\n  background: #0b1120;\n}\n.dark-mode[_ngcontent-%COMP%]   .top-search[_ngcontent-%COMP%], \n.dark-mode[_ngcontent-%COMP%]   .theme-toggle[_ngcontent-%COMP%], \n.dark-mode[_ngcontent-%COMP%]   .icon-btn[_ngcontent-%COMP%] {\n  background: #172238;\n  border-color: #2b3952;\n  color: #d3def2;\n}\n.dark-mode[_ngcontent-%COMP%]   .top-search[_ngcontent-%COMP%]   input[_ngcontent-%COMP%] {\n  color: #e5eaf4;\n}\n.dark-mode[_ngcontent-%COMP%]   .crumb[_ngcontent-%COMP%]   b[_ngcontent-%COMP%] {\n  color: #dce6f7;\n}\n.dark-mode[_ngcontent-%COMP%]   .top-avatar[_ngcontent-%COMP%] {\n  background: #223454;\n  color: #a9c5ff;\n  box-shadow: 0 0 0 4px #172238;\n}\n.dark-mode[_ngcontent-%COMP%]   footer[_ngcontent-%COMP%] {\n  color: #7f8da7;\n}\n.dark-mode[_ngcontent-%COMP%]   .menu-btn[_ngcontent-%COMP%] {\n  background: #172238;\n  color: #e5eaf4;\n}\n@media (max-width:650px) {\n  .top-search[_ngcontent-%COMP%] {\n    display: none;\n  }\n  .topbar[_ngcontent-%COMP%] {\n    gap: 10px;\n  }\n  .crumb[_ngcontent-%COMP%] {\n    gap: 6px;\n  }\n  .brand[_ngcontent-%COMP%] {\n    padding-bottom: 20px;\n  }\n}\n.app-shell[_ngcontent-%COMP%] {\n  background: #f5f7fc;\n  color: #17233c;\n  background-image:\n    radial-gradient(\n      ellipse at 50% -20%,\n      rgba(50, 103, 229, .07),\n      transparent 45%);\n}\n.sidebar[_ngcontent-%COMP%] {\n  width: 272px;\n  padding: 26px 17px 18px;\n  background: rgba(255, 255, 255, .96);\n  border-left-color: #e5ebf5;\n  box-shadow: 8px 0 35px rgba(25, 45, 85, .025);\n  backdrop-filter: blur(18px);\n}\n.brand[_ngcontent-%COMP%] {\n  padding: 0 9px 29px;\n  gap: 12px;\n}\n.brand-mark[_ngcontent-%COMP%] {\n  width: 46px;\n  height: 46px;\n  border-radius: 15px;\n  background:\n    linear-gradient(\n      145deg,\n      #4b83ff,\n      #2156d6);\n  box-shadow: 0 9px 20px rgba(37, 99, 235, .24);\n}\n.brand[_ngcontent-%COMP%]   b[_ngcontent-%COMP%] {\n  font-size: 22px;\n  letter-spacing: -.7px;\n}\n.brand[_ngcontent-%COMP%]   small[_ngcontent-%COMP%] {\n  font-size: 9px;\n  letter-spacing: 1.25px;\n}\n.side-label[_ngcontent-%COMP%] {\n  padding: 15px 12px 9px;\n  font-size: 10px;\n  letter-spacing: .7px;\n}\nnav[_ngcontent-%COMP%] {\n  gap: 5px;\n  margin-bottom: 8px;\n}\nnav[_ngcontent-%COMP%]   a[_ngcontent-%COMP%] {\n  min-height: 43px;\n  border-radius: 12px;\n  padding: 11px 13px;\n  font-size: 12px;\n  gap: 13px;\n  position: relative;\n  transition:\n    background .2s,\n    color .2s,\n    transform .2s;\n}\nnav[_ngcontent-%COMP%]   a[_ngcontent-%COMP%]:hover {\n  transform: translateX(-2px);\n  background: #f2f6ff;\n}\nnav[_ngcontent-%COMP%]   a.active[_ngcontent-%COMP%] {\n  background:\n    linear-gradient(\n      100deg,\n      #eaf1ff,\n      #f3f6ff);\n  color: #245bda;\n  box-shadow: inset -3px 0 0 #3674f6;\n}\n.nav-icon[_ngcontent-%COMP%] {\n  width: 23px;\n  height: 23px;\n  display: grid;\n  place-items: center;\n  font-size: 17px;\n  border-radius: 8px;\n}\nnav[_ngcontent-%COMP%]   a.active[_ngcontent-%COMP%]   .nav-icon[_ngcontent-%COMP%] {\n  background: #dce8ff;\n}\n.help-box[_ngcontent-%COMP%] {\n  border-radius: 17px;\n  padding: 16px;\n  margin: 18px 2px;\n  background:\n    linear-gradient(\n      145deg,\n      #f2f6ff,\n      #eaf1ff);\n  border-color: #e2eaff;\n}\n.help-icon[_ngcontent-%COMP%] {\n  width: 34px;\n  height: 34px;\n  border-radius: 11px;\n  color: #fff;\n  background:\n    linear-gradient(\n      145deg,\n      #4d84fb,\n      #2861e5);\n}\n.profile-mini[_ngcontent-%COMP%] {\n  border-top-color: #e8edf5;\n  padding: 17px 4px 0;\n}\n.avatar[_ngcontent-%COMP%], \n.top-avatar[_ngcontent-%COMP%] {\n  background: #e8efff;\n  color: #2a60d9;\n}\n.main-area[_ngcontent-%COMP%] {\n  margin-right: 272px;\n  background: #f7f9fd;\n}\n.topbar[_ngcontent-%COMP%] {\n  height: 78px;\n  padding: 0 clamp(20px, 3vw, 42px);\n  background: rgba(255, 255, 255, .92);\n  border-bottom-color: #e8edf5;\n  backdrop-filter: blur(18px);\n  gap: 18px;\n}\n.crumb[_ngcontent-%COMP%] {\n  font-size: 12px;\n  gap: 11px;\n}\n.crumb-home[_ngcontent-%COMP%] {\n  color: #245de0;\n}\n.top-actions[_ngcontent-%COMP%] {\n  gap: 11px;\n}\n.top-search[_ngcontent-%COMP%] {\n  height: 42px;\n  min-width: 235px;\n  border-radius: 13px;\n  background: #f7f9fd;\n  border-color: #e6ebf4;\n}\n.top-search[_ngcontent-%COMP%]   input[_ngcontent-%COMP%] {\n  font-size: 12px;\n}\n.icon-btn[_ngcontent-%COMP%] {\n  width: 41px;\n  height: 41px;\n  border-radius: 13px;\n  border-color: #e6ebf4;\n  transition: transform .18s, background .18s;\n}\n.icon-btn[_ngcontent-%COMP%]:hover {\n  transform: translateY(-2px);\n  background: #f1f5ff;\n}\n.top-avatar[_ngcontent-%COMP%] {\n  width: 39px;\n  height: 39px;\n  box-shadow: 0 0 0 4px #f0f4ff;\n  font-size: 14px;\n}\nfooter[_ngcontent-%COMP%] {\n  padding: 24px clamp(20px, 3vw, 42px);\n  font-size: 10px;\n  color: #929eb1;\n}\n.dark-mode[_ngcontent-%COMP%] {\n  background: #0b1120;\n  background-image: none;\n}\n.dark-mode[_ngcontent-%COMP%]   .help-primary[_ngcontent-%COMP%] {\n  background: #223454;\n  color: #dbe7ff;\n}\n.dark-mode[_ngcontent-%COMP%]   .help-links[_ngcontent-%COMP%]   a[_ngcontent-%COMP%]:hover {\n  background: #223454;\n}\n.dark-mode[_ngcontent-%COMP%]   .sidebar[_ngcontent-%COMP%] {\n  box-shadow: 8px 0 35px rgba(0, 0, 0, .12);\n}\n.dark-mode[_ngcontent-%COMP%]   nav[_ngcontent-%COMP%]   a.active[_ngcontent-%COMP%] {\n  background:\n    linear-gradient(\n      100deg,\n      #1b3158,\n      #172944);\n  box-shadow: inset -3px 0 0 #5b8df7;\n}\n.dark-mode[_ngcontent-%COMP%]   .topbar[_ngcontent-%COMP%] {\n  backdrop-filter: blur(18px);\n}\n.dark-mode[_ngcontent-%COMP%]   .top-search[_ngcontent-%COMP%] {\n  background: #0d1628;\n}\n.dark-mode[_ngcontent-%COMP%]   .page-wrap[_ngcontent-%COMP%] {\n  background-image:\n    radial-gradient(\n      ellipse at 90% 0%,\n      rgba(37, 99, 235, .09),\n      transparent 35%);\n}\n@media (max-width:900px) {\n  .sidebar[_ngcontent-%COMP%] {\n    width: 272px;\n  }\n  .main-area[_ngcontent-%COMP%] {\n    margin-right: 0;\n  }\n  .topbar[_ngcontent-%COMP%] {\n    height: 70px;\n  }\n}\n@media (max-width:650px) {\n  .topbar[_ngcontent-%COMP%] {\n    padding: 0 14px;\n  }\n  .crumb[_ngcontent-%COMP%]   b[_ngcontent-%COMP%] {\n    display: none;\n  }\n  .top-actions[_ngcontent-%COMP%] {\n    gap: 7px;\n  }\n  .icon-btn[_ngcontent-%COMP%] {\n    width: 36px;\n    height: 36px;\n  }\n  .top-avatar[_ngcontent-%COMP%] {\n    width: 34px;\n    height: 34px;\n  }\n  footer[_ngcontent-%COMP%] {\n    padding: 18px 15px;\n  }\n}\n/*# sourceMappingURL=app.component.css.map */"] });
+    }, dependencies: [RouterOutlet, RouterLink, RouterLinkActive, NgForOf], styles: ["\n\n[_nghost-%COMP%] {\n  display: block;\n  min-height: 100vh;\n}\n.app-shell[_ngcontent-%COMP%] {\n  min-height: 100vh;\n}\n.sidebar[_ngcontent-%COMP%] {\n  position: fixed;\n  inset: 0 0 0 auto;\n  width: 260px;\n  background: #fff;\n  border-left: 1px solid #e8edf4;\n  z-index: 20;\n  display: flex;\n  flex-direction: column;\n  padding: 24px 16px;\n  overflow-y: auto;\n}\n.brand[_ngcontent-%COMP%] {\n  display: flex;\n  align-items: center;\n  gap: 11px;\n  text-decoration: none;\n  color: #14213d;\n  padding: 0 8px 27px;\n}\n.brand-mark[_ngcontent-%COMP%] {\n  display: grid;\n  place-items: center;\n  width: 43px;\n  height: 43px;\n  border-radius: 14px;\n  background: #2463eb;\n  color: white;\n  font-size: 25px;\n  font-weight: 800;\n  box-shadow: 0 7px 15px #2463eb30;\n}\n.brand[_ngcontent-%COMP%]   b[_ngcontent-%COMP%] {\n  display: block;\n  font-size: 20px;\n  letter-spacing: -.5px;\n}\n.brand[_ngcontent-%COMP%]   small[_ngcontent-%COMP%] {\n  display: block;\n  font-size: 9px;\n  letter-spacing: 1.4px;\n  color: #8a96aa;\n  margin-top: 2px;\n}\n.side-label[_ngcontent-%COMP%] {\n  font-size: 11px;\n  font-weight: 800;\n  color: #a0aabc;\n  padding: 13px 12px 8px;\n}\nnav[_ngcontent-%COMP%] {\n  display: grid;\n  gap: 4px;\n  margin-bottom: 8px;\n}\nnav[_ngcontent-%COMP%]   a[_ngcontent-%COMP%] {\n  display: flex;\n  align-items: center;\n  gap: 12px;\n  text-decoration: none;\n  color: #64718a;\n  padding: 11px 12px;\n  border-radius: 10px;\n  font-size: 13px;\n  font-weight: 600;\n  transition: .2s;\n}\nnav[_ngcontent-%COMP%]   a[_ngcontent-%COMP%]:hover {\n  background: #f4f7ff;\n  color: #245de0;\n}\nnav[_ngcontent-%COMP%]   a.active[_ngcontent-%COMP%] {\n  background: #eaf0ff;\n  color: #2159db;\n  font-weight: 800;\n}\n.nav-icon[_ngcontent-%COMP%] {\n  width: 22px;\n  text-align: center;\n  font-size: 17px;\n}\n.sidebar-bottom[_ngcontent-%COMP%] {\n  margin-top: auto;\n}\n.help-box[_ngcontent-%COMP%] {\n  background: #f1f5ff;\n  border: 1px solid #e4ebff;\n  border-radius: 14px;\n  padding: 15px;\n  margin: 15px 2px;\n}\n.help-icon[_ngcontent-%COMP%] {\n  display: grid;\n  place-items: center;\n  width: 30px;\n  height: 30px;\n  border-radius: 9px;\n  background: white;\n  color: #2864e8;\n  margin-bottom: 10px;\n}\n.help-box[_ngcontent-%COMP%]   b[_ngcontent-%COMP%] {\n  font-size: 12px;\n}\n.help-box[_ngcontent-%COMP%]   p[_ngcontent-%COMP%] {\n  font-size: 11px;\n  color: #77839a;\n  margin: 6px 0 10px;\n}\n.help-box[_ngcontent-%COMP%]   a[_ngcontent-%COMP%] {\n  font-size: 11px;\n  font-weight: 800;\n  color: #245de0;\n  text-decoration: none;\n}\n.help-primary[_ngcontent-%COMP%] {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  background: #e1eaff;\n  border-radius: 8px;\n  padding: 8px 10px;\n}\n.help-primary[_ngcontent-%COMP%]   span[_ngcontent-%COMP%] {\n  font-size: 14px;\n}\n.help-links[_ngcontent-%COMP%] {\n  display: grid;\n  grid-template-columns: repeat(2, minmax(0, 1fr));\n  gap: 5px 8px;\n  margin-top: 9px;\n}\n.help-links[_ngcontent-%COMP%]   a[_ngcontent-%COMP%] {\n  min-width: 0;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  border-radius: 6px;\n  padding: 5px 3px;\n  font-size: 9px;\n  text-align: center;\n}\n.help-links[_ngcontent-%COMP%]   a[_ngcontent-%COMP%]:hover {\n  background: #e1eaff;\n}\n.profile-mini[_ngcontent-%COMP%] {\n  display: flex;\n  align-items: center;\n  gap: 10px;\n  border-top: 1px solid #edf0f5;\n  padding: 17px 4px 0;\n}\n.avatar[_ngcontent-%COMP%], \n.top-avatar[_ngcontent-%COMP%] {\n  display: grid;\n  place-items: center;\n  background: #e9efff;\n  color: #245de0;\n  border: 0;\n  border-radius: 50%;\n  width: 37px;\n  height: 37px;\n  font-weight: 800;\n}\n.profile-mini[_ngcontent-%COMP%]   b[_ngcontent-%COMP%] {\n  display: block;\n  font-size: 12px;\n}\n.profile-mini[_ngcontent-%COMP%]   small[_ngcontent-%COMP%] {\n  font-size: 10px;\n  color: #9aa4b5;\n}\n.dots[_ngcontent-%COMP%] {\n  margin-right: auto;\n  color: #8994a6;\n}\n.main-area[_ngcontent-%COMP%] {\n  margin-right: 260px;\n  min-height: 100vh;\n  display: flex;\n  flex-direction: column;\n  background: #f7f9fc;\n}\n.topbar[_ngcontent-%COMP%] {\n  height: 76px;\n  background: #fff;\n  border-bottom: 1px solid #e8edf4;\n  display: flex;\n  align-items: center;\n  padding: 0 34px;\n  gap: 15px;\n  position: sticky;\n  top: 0;\n  z-index: 10;\n}\n.crumb[_ngcontent-%COMP%] {\n  font-size: 12px;\n  color: #98a3b5;\n  display: flex;\n  align-items: center;\n  gap: 10px;\n}\n.crumb[_ngcontent-%COMP%]   b[_ngcontent-%COMP%] {\n  color: #35415a;\n}\n.crumb-sep[_ngcontent-%COMP%] {\n  color: #d0d6e0;\n}\n.top-actions[_ngcontent-%COMP%] {\n  margin-right: auto;\n  display: flex;\n  align-items: center;\n  gap: 15px;\n}\n.icon-btn[_ngcontent-%COMP%] {\n  position: relative;\n  border: 1px solid #e7ebf2;\n  background: #fff;\n  width: 38px;\n  height: 38px;\n  border-radius: 11px;\n  color: #65728a;\n  font-size: 19px;\n}\n.icon-btn[_ngcontent-%COMP%]   i[_ngcontent-%COMP%] {\n  position: absolute;\n  width: 6px;\n  height: 6px;\n  border-radius: 50%;\n  background: #f05a65;\n  top: 8px;\n  left: 8px;\n}\n.top-avatar[_ngcontent-%COMP%] {\n  width: 36px;\n  height: 36px;\n}\n.menu-btn[_ngcontent-%COMP%] {\n  display: none;\n  border: 0;\n  background: #f3f6fc;\n  border-radius: 9px;\n  padding: 8px 11px;\n}\nfooter[_ngcontent-%COMP%] {\n  margin-top: auto;\n  padding: 22px 34px;\n  color: #9ba5b5;\n  font-size: 10px;\n  display: flex;\n  justify-content: space-between;\n  gap: 12px;\n}\n.menu-btn[_ngcontent-%COMP%] {\n  cursor: pointer;\n}\n@media (max-width:900px) {\n  .sidebar[_ngcontent-%COMP%] {\n    transform: translateX(105%);\n    transition: transform .25s;\n    box-shadow: none;\n  }\n  .sidebar.open[_ngcontent-%COMP%] {\n    transform: translateX(0);\n    box-shadow: 0 0 0 999px #11182766;\n  }\n  .main-area[_ngcontent-%COMP%] {\n    margin-right: 0;\n  }\n  .menu-btn[_ngcontent-%COMP%] {\n    display: block;\n  }\n  .topbar[_ngcontent-%COMP%] {\n    padding: 0 18px;\n  }\n  footer[_ngcontent-%COMP%] {\n    padding: 18px;\n  }\n  .crumb[_ngcontent-%COMP%] {\n    font-size: 11px;\n  }\n}\n.top-search[_ngcontent-%COMP%] {\n  display: flex;\n  align-items: center;\n  gap: 9px;\n  border: 1px solid #e4e9f2;\n  background: #f8faff;\n  border-radius: 12px;\n  padding: 0 12px;\n  height: 39px;\n  min-width: 210px;\n  color: #8a96aa;\n}\n.top-search[_ngcontent-%COMP%]   span[_ngcontent-%COMP%] {\n  font-size: 22px;\n}\n.top-search[_ngcontent-%COMP%]   input[_ngcontent-%COMP%] {\n  width: 100%;\n  border: 0;\n  outline: 0;\n  background: transparent;\n  color: #25314a;\n  font-size: 12px;\n  min-width: 0;\n}\n.crumb-home[_ngcontent-%COMP%] {\n  font-weight: 800;\n  color: #245de0;\n}\n.top-actions[_ngcontent-%COMP%] {\n  gap: 10px;\n}\n.theme-toggle[_ngcontent-%COMP%] {\n  font-size: 21px;\n  cursor: pointer;\n  background: #f7f9ff;\n  color: #465574;\n}\n.notification-btn[_ngcontent-%COMP%] {\n  cursor: pointer;\n}\n.top-avatar[_ngcontent-%COMP%] {\n  cursor: pointer;\n  box-shadow: 0 0 0 4px #edf2ff;\n}\n.app-shell.dark-mode[_ngcontent-%COMP%] {\n  background: #0b1120;\n  color: #e5eaf4;\n  color-scheme: dark;\n}\n.dark-mode[_ngcontent-%COMP%]   .sidebar[_ngcontent-%COMP%], \n.dark-mode[_ngcontent-%COMP%]   .topbar[_ngcontent-%COMP%] {\n  background: #111a2d;\n  border-color: #26334a;\n}\n.dark-mode[_ngcontent-%COMP%]   .brand[_ngcontent-%COMP%] {\n  color: #f1f5ff;\n}\n.dark-mode[_ngcontent-%COMP%]   .brand[_ngcontent-%COMP%]   small[_ngcontent-%COMP%], \n.dark-mode[_ngcontent-%COMP%]   .side-label[_ngcontent-%COMP%], \n.dark-mode[_ngcontent-%COMP%]   .profile-mini[_ngcontent-%COMP%]   small[_ngcontent-%COMP%] {\n  color: #8492ad;\n}\n.dark-mode[_ngcontent-%COMP%]   nav[_ngcontent-%COMP%]   a[_ngcontent-%COMP%] {\n  color: #a9b6cd;\n}\n.dark-mode[_ngcontent-%COMP%]   nav[_ngcontent-%COMP%]   a[_ngcontent-%COMP%]:hover {\n  background: #1a2943;\n  color: #91b7ff;\n}\n.dark-mode[_ngcontent-%COMP%]   nav[_ngcontent-%COMP%]   a.active[_ngcontent-%COMP%] {\n  background: #1b3158;\n  color: #8db4ff;\n}\n.dark-mode[_ngcontent-%COMP%]   .help-box[_ngcontent-%COMP%] {\n  background: #17243c;\n  border-color: #283b60;\n}\n.dark-mode[_ngcontent-%COMP%]   .help-box[_ngcontent-%COMP%]   b[_ngcontent-%COMP%], \n.dark-mode[_ngcontent-%COMP%]   .profile-mini[_ngcontent-%COMP%]   b[_ngcontent-%COMP%] {\n  color: #e9efff;\n}\n.dark-mode[_ngcontent-%COMP%]   .help-box[_ngcontent-%COMP%]   p[_ngcontent-%COMP%] {\n  color: #a0aec6;\n}\n.dark-mode[_ngcontent-%COMP%]   .help-icon[_ngcontent-%COMP%] {\n  background: #223454;\n  color: #9bbcff;\n}\n.dark-mode[_ngcontent-%COMP%]   .main-area[_ngcontent-%COMP%] {\n  background: #0b1120;\n}\n.dark-mode[_ngcontent-%COMP%]   .top-search[_ngcontent-%COMP%], \n.dark-mode[_ngcontent-%COMP%]   .theme-toggle[_ngcontent-%COMP%], \n.dark-mode[_ngcontent-%COMP%]   .icon-btn[_ngcontent-%COMP%] {\n  background: #172238;\n  border-color: #2b3952;\n  color: #d3def2;\n}\n.dark-mode[_ngcontent-%COMP%]   .top-search[_ngcontent-%COMP%]   input[_ngcontent-%COMP%] {\n  color: #e5eaf4;\n}\n.dark-mode[_ngcontent-%COMP%]   .crumb[_ngcontent-%COMP%]   b[_ngcontent-%COMP%] {\n  color: #dce6f7;\n}\n.dark-mode[_ngcontent-%COMP%]   .top-avatar[_ngcontent-%COMP%] {\n  background: #223454;\n  color: #a9c5ff;\n  box-shadow: 0 0 0 4px #172238;\n}\n.dark-mode[_ngcontent-%COMP%]   footer[_ngcontent-%COMP%] {\n  color: #7f8da7;\n}\n.dark-mode[_ngcontent-%COMP%]   .menu-btn[_ngcontent-%COMP%] {\n  background: #172238;\n  color: #e5eaf4;\n}\n@media (max-width:650px) {\n  .top-search[_ngcontent-%COMP%] {\n    display: none;\n  }\n  .topbar[_ngcontent-%COMP%] {\n    gap: 10px;\n  }\n  .crumb[_ngcontent-%COMP%] {\n    gap: 6px;\n  }\n  .brand[_ngcontent-%COMP%] {\n    padding-bottom: 20px;\n  }\n}\n.app-shell[_ngcontent-%COMP%] {\n  background: #f5f7fc;\n  color: #17233c;\n  background-image:\n    radial-gradient(\n      ellipse at 50% -20%,\n      rgba(50, 103, 229, .07),\n      transparent 45%);\n}\n.sidebar[_ngcontent-%COMP%] {\n  width: 272px;\n  padding: 26px 17px 18px;\n  background: rgba(255, 255, 255, .96);\n  border-left-color: #e5ebf5;\n  box-shadow: 8px 0 35px rgba(25, 45, 85, .025);\n  backdrop-filter: blur(18px);\n}\n.brand[_ngcontent-%COMP%] {\n  padding: 0 9px 29px;\n  gap: 12px;\n}\n.brand-mark[_ngcontent-%COMP%] {\n  width: 46px;\n  height: 46px;\n  border-radius: 15px;\n  background:\n    linear-gradient(\n      145deg,\n      #4b83ff,\n      #2156d6);\n  box-shadow: 0 9px 20px rgba(37, 99, 235, .24);\n}\n.brand[_ngcontent-%COMP%]   b[_ngcontent-%COMP%] {\n  font-size: 22px;\n  letter-spacing: -.7px;\n}\n.brand[_ngcontent-%COMP%]   small[_ngcontent-%COMP%] {\n  font-size: 9px;\n  letter-spacing: 1.25px;\n}\n.side-label[_ngcontent-%COMP%] {\n  padding: 15px 12px 9px;\n  font-size: 10px;\n  letter-spacing: .7px;\n}\nnav[_ngcontent-%COMP%] {\n  gap: 5px;\n  margin-bottom: 8px;\n}\nnav[_ngcontent-%COMP%]   a[_ngcontent-%COMP%] {\n  min-height: 43px;\n  border-radius: 12px;\n  padding: 11px 13px;\n  font-size: 12px;\n  gap: 13px;\n  position: relative;\n  transition:\n    background .2s,\n    color .2s,\n    transform .2s;\n}\nnav[_ngcontent-%COMP%]   a[_ngcontent-%COMP%]:hover {\n  transform: translateX(-2px);\n  background: #f2f6ff;\n}\nnav[_ngcontent-%COMP%]   a.active[_ngcontent-%COMP%] {\n  background:\n    linear-gradient(\n      100deg,\n      #eaf1ff,\n      #f3f6ff);\n  color: #245bda;\n  box-shadow: inset -3px 0 0 #3674f6;\n}\n.nav-icon[_ngcontent-%COMP%] {\n  width: 23px;\n  height: 23px;\n  display: grid;\n  place-items: center;\n  font-size: 17px;\n  border-radius: 8px;\n}\nnav[_ngcontent-%COMP%]   a.active[_ngcontent-%COMP%]   .nav-icon[_ngcontent-%COMP%] {\n  background: #dce8ff;\n}\n.help-box[_ngcontent-%COMP%] {\n  border-radius: 17px;\n  padding: 16px;\n  margin: 18px 2px;\n  background:\n    linear-gradient(\n      145deg,\n      #f2f6ff,\n      #eaf1ff);\n  border-color: #e2eaff;\n}\n.help-icon[_ngcontent-%COMP%] {\n  width: 34px;\n  height: 34px;\n  border-radius: 11px;\n  color: #fff;\n  background:\n    linear-gradient(\n      145deg,\n      #4d84fb,\n      #2861e5);\n}\n.profile-mini[_ngcontent-%COMP%] {\n  border-top-color: #e8edf5;\n  padding: 17px 4px 0;\n}\n.avatar[_ngcontent-%COMP%], \n.top-avatar[_ngcontent-%COMP%] {\n  background: #e8efff;\n  color: #2a60d9;\n}\n.main-area[_ngcontent-%COMP%] {\n  margin-right: 272px;\n  background: #f7f9fd;\n}\n.topbar[_ngcontent-%COMP%] {\n  height: 78px;\n  padding: 0 clamp(20px, 3vw, 42px);\n  background: rgba(255, 255, 255, .92);\n  border-bottom-color: #e8edf5;\n  backdrop-filter: blur(18px);\n  gap: 18px;\n}\n.crumb[_ngcontent-%COMP%] {\n  font-size: 12px;\n  gap: 11px;\n}\n.crumb-home[_ngcontent-%COMP%] {\n  color: #245de0;\n}\n.top-actions[_ngcontent-%COMP%] {\n  gap: 11px;\n}\n.top-search[_ngcontent-%COMP%] {\n  height: 42px;\n  min-width: 235px;\n  border-radius: 13px;\n  background: #f7f9fd;\n  border-color: #e6ebf4;\n}\n.top-search[_ngcontent-%COMP%]   input[_ngcontent-%COMP%] {\n  font-size: 12px;\n}\n.icon-btn[_ngcontent-%COMP%] {\n  width: 41px;\n  height: 41px;\n  border-radius: 13px;\n  border-color: #e6ebf4;\n  transition: transform .18s, background .18s;\n}\n.icon-btn[_ngcontent-%COMP%]:hover {\n  transform: translateY(-2px);\n  background: #f1f5ff;\n}\n.top-avatar[_ngcontent-%COMP%] {\n  width: 39px;\n  height: 39px;\n  box-shadow: 0 0 0 4px #f0f4ff;\n  font-size: 14px;\n}\nfooter[_ngcontent-%COMP%] {\n  padding: 24px clamp(20px, 3vw, 42px);\n  font-size: 10px;\n  color: #929eb1;\n}\n.dark-mode[_ngcontent-%COMP%] {\n  background: #0b1120;\n  background-image: none;\n}\n.dark-mode[_ngcontent-%COMP%]   .help-primary[_ngcontent-%COMP%] {\n  background: #223454;\n  color: #dbe7ff;\n}\n.dark-mode[_ngcontent-%COMP%]   .help-links[_ngcontent-%COMP%]   a[_ngcontent-%COMP%]:hover {\n  background: #223454;\n}\n.dark-mode[_ngcontent-%COMP%]   .sidebar[_ngcontent-%COMP%] {\n  box-shadow: 8px 0 35px rgba(0, 0, 0, .12);\n}\n.dark-mode[_ngcontent-%COMP%]   nav[_ngcontent-%COMP%]   a.active[_ngcontent-%COMP%] {\n  background:\n    linear-gradient(\n      100deg,\n      #1b3158,\n      #172944);\n  box-shadow: inset -3px 0 0 #5b8df7;\n}\n.dark-mode[_ngcontent-%COMP%]   .topbar[_ngcontent-%COMP%] {\n  backdrop-filter: blur(18px);\n}\n.dark-mode[_ngcontent-%COMP%]   .top-search[_ngcontent-%COMP%] {\n  background: #0d1628;\n}\n.dark-mode[_ngcontent-%COMP%]   .page-wrap[_ngcontent-%COMP%] {\n  background-image:\n    radial-gradient(\n      ellipse at 90% 0%,\n      rgba(37, 99, 235, .09),\n      transparent 35%);\n}\n@media (max-width:900px) {\n  .sidebar[_ngcontent-%COMP%] {\n    width: 272px;\n  }\n  .main-area[_ngcontent-%COMP%] {\n    margin-right: 0;\n  }\n  .topbar[_ngcontent-%COMP%] {\n    height: 70px;\n  }\n}\n@media (max-width:650px) {\n  .topbar[_ngcontent-%COMP%] {\n    padding: 0 14px;\n  }\n  .crumb[_ngcontent-%COMP%]   b[_ngcontent-%COMP%] {\n    display: none;\n  }\n  .top-actions[_ngcontent-%COMP%] {\n    gap: 7px;\n  }\n  .icon-btn[_ngcontent-%COMP%] {\n    width: 36px;\n    height: 36px;\n  }\n  .top-avatar[_ngcontent-%COMP%] {\n    width: 34px;\n    height: 34px;\n  }\n  footer[_ngcontent-%COMP%] {\n    padding: 18px 15px;\n  }\n}\n/*# sourceMappingURL=app.component.css.map */"] });
   }
 };
 (() => {
@@ -47031,13 +47153,720 @@ var ShowcaseComponent = class _ShowcaseComponent {
   (typeof ngDevMode === "undefined" || ngDevMode) && \u0275setClassDebugInfo(ShowcaseComponent, { className: "ShowcaseComponent", filePath: "app\\showcase.component.ts", lineNumber: 310 });
 })();
 
+// src/app/core/theme.service.ts
+var ThemeService = class _ThemeService {
+  constructor() {
+    this.theme = signal(localStorage.getItem("devfix-theme") || "light");
+    this.apply();
+  }
+  toggle() {
+    this.theme.update((t) => t === "light" ? "dark" : "light");
+    localStorage.setItem("devfix-theme", this.theme());
+    this.apply();
+  }
+  apply() {
+    document.documentElement.setAttribute("data-theme", this.theme());
+  }
+  static {
+    this.\u0275fac = function ThemeService_Factory(__ngFactoryType__) {
+      return new (__ngFactoryType__ || _ThemeService)();
+    };
+  }
+  static {
+    this.\u0275prov = /* @__PURE__ */ \u0275\u0275defineInjectable({ token: _ThemeService, factory: _ThemeService.\u0275fac, providedIn: "root" });
+  }
+};
+
+// src/app/core/dc-base.ts
+var DcBase = class _DcBase {
+  constructor() {
+    this.themeSvc = inject(ThemeService);
+    this.route = inject(ActivatedRoute);
+    this.defaults = {};
+    this.state = {};
+    this.v = {};
+    effect(() => {
+      this.themeSvc.theme();
+      this.refresh();
+    });
+  }
+  get props() {
+    const q = this.route.snapshot.queryParams;
+    const out = __spreadProps(__spreadValues({}, this.defaults), { theme: this.themeSvc.theme() });
+    for (const k of Object.keys(this.defaults)) {
+      if (q[k] !== void 0)
+        out[k] = typeof this.defaults[k] === "number" ? Number(q[k]) : q[k];
+    }
+    return out;
+  }
+  ngOnInit() {
+    this.refresh();
+    this.componentDidMount();
+  }
+  ngOnDestroy() {
+    this.componentWillUnmount();
+  }
+  componentDidMount() {
+  }
+  componentWillUnmount() {
+  }
+  setState(patch) {
+    const p = typeof patch === "function" ? patch(this.state) : patch;
+    this.state = __spreadValues(__spreadValues({}, this.state), p);
+    this.refresh();
+  }
+  refresh() {
+    this.v = this.renderVals();
+  }
+  static {
+    this.\u0275fac = function DcBase_Factory(__ngFactoryType__) {
+      return new (__ngFactoryType__ || _DcBase)();
+    };
+  }
+  static {
+    this.\u0275dir = /* @__PURE__ */ \u0275\u0275defineDirective({ type: _DcBase });
+  }
+};
+
+// src/app/pages/customer/request-wizard/request-wizard.component.ts
+var _forTrack0 = ($index, $item) => $item.value;
+var _forTrack1 = ($index, $item) => $item.label;
+var _forTrack2 = ($index, $item) => $item.id;
+function RequestWizardComponent_Conditional_14_For_2_Template(rf, ctx) {
+  if (rf & 1) {
+    \u0275\u0275elementStart(0, "li")(1, "span", 17);
+    \u0275\u0275text(2);
+    \u0275\u0275elementEnd();
+    \u0275\u0275elementStart(3, "small");
+    \u0275\u0275text(4);
+    \u0275\u0275elementEnd()();
+  }
+  if (rf & 2) {
+    const s_r1 = ctx.$implicit;
+    \u0275\u0275classMapInterpolate1("step ", s_r1.cls, "");
+    \u0275\u0275advance(2);
+    \u0275\u0275textInterpolate(s_r1.n);
+    \u0275\u0275advance(2);
+    \u0275\u0275textInterpolate(s_r1.label);
+  }
+}
+function RequestWizardComponent_Conditional_14_Template(rf, ctx) {
+  if (rf & 1) {
+    \u0275\u0275elementStart(0, "ol", 11);
+    \u0275\u0275repeaterCreate(1, RequestWizardComponent_Conditional_14_For_2_Template, 5, 5, "li", 16, \u0275\u0275repeaterTrackByIndex);
+    \u0275\u0275elementEnd();
+  }
+  if (rf & 2) {
+    const ctx_r1 = \u0275\u0275nextContext();
+    \u0275\u0275advance();
+    \u0275\u0275repeater(ctx_r1.v.stepper);
+  }
+}
+function RequestWizardComponent_Conditional_16_Conditional_1_For_7_Template(rf, ctx) {
+  if (rf & 1) {
+    const _r3 = \u0275\u0275getCurrentView();
+    \u0275\u0275elementStart(0, "button", 22);
+    \u0275\u0275listener("click", function RequestWizardComponent_Conditional_16_Conditional_1_For_7_Template_button_click_0_listener() {
+      const d_r4 = \u0275\u0275restoreView(_r3).$implicit;
+      return \u0275\u0275resetView(d_r4.pick());
+    });
+    \u0275\u0275elementStart(1, "span", 23);
+    \u0275\u0275namespaceSVG();
+    \u0275\u0275elementStart(2, "svg", 24);
+    \u0275\u0275element(3, "path");
+    \u0275\u0275elementEnd();
+    \u0275\u0275namespaceHTML();
+    \u0275\u0275elementStart(4, "span");
+    \u0275\u0275text(5);
+    \u0275\u0275element(6, "br");
+    \u0275\u0275elementStart(7, "span", 25);
+    \u0275\u0275text(8);
+    \u0275\u0275elementEnd()()();
+    \u0275\u0275elementStart(9, "span", 26);
+    \u0275\u0275text(10);
+    \u0275\u0275elementEnd()();
+  }
+  if (rf & 2) {
+    const d_r4 = ctx.$implicit;
+    \u0275\u0275classMapInterpolate1("opt ", d_r4.cls, "");
+    \u0275\u0275attribute("aria-pressed", d_r4.pressed);
+    \u0275\u0275advance(3);
+    \u0275\u0275attribute("d", d_r4.icon);
+    \u0275\u0275advance(2);
+    \u0275\u0275textInterpolate(d_r4.name);
+    \u0275\u0275advance(3);
+    \u0275\u0275textInterpolate(d_r4.sub);
+    \u0275\u0275advance(2);
+    \u0275\u0275textInterpolate(d_r4.badge);
+  }
+}
+function RequestWizardComponent_Conditional_16_Conditional_1_Template(rf, ctx) {
+  if (rf & 1) {
+    \u0275\u0275elementStart(0, "div")(1, "h2", 19);
+    \u0275\u0275text(2, "\u0627\u062E\u062A\u0631 \u0627\u0644\u062C\u0647\u0627\u0632");
+    \u0275\u0275elementEnd();
+    \u0275\u0275elementStart(3, "p", 20);
+    \u0275\u0275text(4, "\u0627\u062E\u062A\u0631\u0646\u0627 \u062C\u0647\u0627\u0632\u0643 \u0627\u0644\u0627\u0641\u062A\u0631\u0627\u0636\u064A\u060C \u0648\u064A\u0645\u0643\u0646\u0643 \u062A\u063A\u064A\u064A\u0631\u0647.");
+    \u0275\u0275elementEnd()();
+    \u0275\u0275elementStart(5, "div", 21);
+    \u0275\u0275repeaterCreate(6, RequestWizardComponent_Conditional_16_Conditional_1_For_7_Template, 11, 8, "button", 16, \u0275\u0275repeaterTrackByIndex);
+    \u0275\u0275elementEnd();
+  }
+  if (rf & 2) {
+    const ctx_r1 = \u0275\u0275nextContext(2);
+    \u0275\u0275advance(6);
+    \u0275\u0275repeater(ctx_r1.v.devices);
+  }
+}
+function RequestWizardComponent_Conditional_16_Conditional_2_For_7_Template(rf, ctx) {
+  if (rf & 1) {
+    const _r6 = \u0275\u0275getCurrentView();
+    \u0275\u0275elementStart(0, "button", 39);
+    \u0275\u0275listener("click", function RequestWizardComponent_Conditional_16_Conditional_2_For_7_Template_button_click_0_listener() {
+      const i_r7 = \u0275\u0275restoreView(_r6).$implicit;
+      return \u0275\u0275resetView(i_r7.pick());
+    });
+    \u0275\u0275text(1);
+    \u0275\u0275elementEnd();
+  }
+  if (rf & 2) {
+    const i_r7 = ctx.$implicit;
+    \u0275\u0275classMapInterpolate1("opt ", i_r7.cls, "");
+    \u0275\u0275attribute("aria-pressed", i_r7.pressed);
+    \u0275\u0275advance();
+    \u0275\u0275textInterpolate(i_r7.label);
+  }
+}
+function RequestWizardComponent_Conditional_16_Conditional_2_For_33_Template(rf, ctx) {
+  if (rf & 1) {
+    const _r8 = \u0275\u0275getCurrentView();
+    \u0275\u0275elementStart(0, "button", 22);
+    \u0275\u0275listener("click", function RequestWizardComponent_Conditional_16_Conditional_2_For_33_Template_button_click_0_listener() {
+      const p_r9 = \u0275\u0275restoreView(_r8).$implicit;
+      return \u0275\u0275resetView(p_r9.pick());
+    });
+    \u0275\u0275elementStart(1, "b");
+    \u0275\u0275text(2);
+    \u0275\u0275elementEnd();
+    \u0275\u0275elementStart(3, "small");
+    \u0275\u0275text(4);
+    \u0275\u0275elementEnd()();
+  }
+  if (rf & 2) {
+    const p_r9 = ctx.$implicit;
+    \u0275\u0275classMapInterpolate1("choice ", p_r9.cls, "");
+    \u0275\u0275attribute("aria-pressed", p_r9.pressed);
+    \u0275\u0275advance(2);
+    \u0275\u0275textInterpolate(p_r9.label);
+    \u0275\u0275advance(2);
+    \u0275\u0275textInterpolate(p_r9.description);
+  }
+}
+function RequestWizardComponent_Conditional_16_Conditional_2_Conditional_34_For_5_Template(rf, ctx) {
+  if (rf & 1) {
+    const _r10 = \u0275\u0275getCurrentView();
+    \u0275\u0275elementStart(0, "button", 22);
+    \u0275\u0275listener("click", function RequestWizardComponent_Conditional_16_Conditional_2_Conditional_34_For_5_Template_button_click_0_listener() {
+      const c_r11 = \u0275\u0275restoreView(_r10).$implicit;
+      return \u0275\u0275resetView(c_r11.pick());
+    });
+    \u0275\u0275text(1);
+    \u0275\u0275elementEnd();
+  }
+  if (rf & 2) {
+    const c_r11 = ctx.$implicit;
+    \u0275\u0275classMapInterpolate1("chip ", c_r11.cls, "");
+    \u0275\u0275attribute("aria-pressed", c_r11.pressed);
+    \u0275\u0275advance();
+    \u0275\u0275textInterpolate(c_r11.label);
+  }
+}
+function RequestWizardComponent_Conditional_16_Conditional_2_Conditional_34_Template(rf, ctx) {
+  if (rf & 1) {
+    \u0275\u0275elementStart(0, "div")(1, "p", 32);
+    \u0275\u0275text(2, "\u0645\u0631\u0643\u0632 \u0627\u0644\u0635\u064A\u0627\u0646\u0629 \u0627\u0644\u0645\u0641\u0636\u0644");
+    \u0275\u0275elementEnd();
+    \u0275\u0275elementStart(3, "div", 40);
+    \u0275\u0275repeaterCreate(4, RequestWizardComponent_Conditional_16_Conditional_2_Conditional_34_For_5_Template, 2, 5, "button", 16, _forTrack1);
+    \u0275\u0275elementEnd()();
+  }
+  if (rf & 2) {
+    const ctx_r1 = \u0275\u0275nextContext(3);
+    \u0275\u0275advance(4);
+    \u0275\u0275repeater(ctx_r1.v.centers);
+  }
+}
+function RequestWizardComponent_Conditional_16_Conditional_2_Template(rf, ctx) {
+  if (rf & 1) {
+    const _r5 = \u0275\u0275getCurrentView();
+    \u0275\u0275elementStart(0, "div")(1, "h2", 19);
+    \u0275\u0275text(2, "\u0648\u0635\u0641 \u0627\u0644\u0639\u0637\u0644 \u0648\u0627\u0644\u0639\u0631\u0648\u0636");
+    \u0275\u0275elementEnd();
+    \u0275\u0275elementStart(3, "p", 20);
+    \u0275\u0275text(4, "\u0627\u062E\u062A\u0631 \u0646\u0648\u0639 \u0627\u0644\u0639\u0637\u0644\u060C \u062B\u0645 \u0623\u062E\u0628\u0631\u0646\u0627 \u0628\u0645\u0627 \u062A\u0641\u0636\u0644\u0647 \u0641\u064A \u0639\u0631\u0648\u0636 \u0627\u0644\u0635\u064A\u0627\u0646\u0629.");
+    \u0275\u0275elementEnd()();
+    \u0275\u0275elementStart(5, "div", 27);
+    \u0275\u0275repeaterCreate(6, RequestWizardComponent_Conditional_16_Conditional_2_For_7_Template, 2, 5, "button", 28, \u0275\u0275repeaterTrackByIndex);
+    \u0275\u0275elementEnd();
+    \u0275\u0275elementStart(8, "div", 29)(9, "label", 30);
+    \u0275\u0275text(10, "\u062A\u0641\u0627\u0635\u064A\u0644 \u0625\u0636\u0627\u0641\u064A\u0629 \u0639\u0646 \u0627\u0644\u0639\u0637\u0644");
+    \u0275\u0275elementEnd();
+    \u0275\u0275elementStart(11, "textarea", 31);
+    \u0275\u0275listener("input", function RequestWizardComponent_Conditional_16_Conditional_2_Template_textarea_input_11_listener($event) {
+      \u0275\u0275restoreView(_r5);
+      const ctx_r1 = \u0275\u0275nextContext(2);
+      return \u0275\u0275resetView(ctx_r1.v.setDescription($event));
+    });
+    \u0275\u0275elementEnd()();
+    \u0275\u0275elementStart(12, "div")(13, "p", 32);
+    \u0275\u0275text(14, "\u0635\u0648\u0631 \u062A\u0648\u0636\u064A\u062D\u064A\u0629 (\u0627\u062E\u062A\u064A\u0627\u0631\u064A)");
+    \u0275\u0275elementEnd();
+    \u0275\u0275elementStart(15, "div", 33)(16, "button", 34);
+    \u0275\u0275namespaceSVG();
+    \u0275\u0275elementStart(17, "svg", 5);
+    \u0275\u0275element(18, "path", 35);
+    \u0275\u0275elementEnd();
+    \u0275\u0275text(19, "\u0625\u0636\u0627\u0641\u0629 \u0635\u0648\u0631\u0629");
+    \u0275\u0275elementEnd();
+    \u0275\u0275namespaceHTML();
+    \u0275\u0275elementStart(20, "button", 34);
+    \u0275\u0275namespaceSVG();
+    \u0275\u0275elementStart(21, "svg", 5);
+    \u0275\u0275element(22, "path", 35);
+    \u0275\u0275elementEnd();
+    \u0275\u0275text(23, "\u0625\u0636\u0627\u0641\u0629 \u0635\u0648\u0631\u0629");
+    \u0275\u0275elementEnd();
+    \u0275\u0275namespaceHTML();
+    \u0275\u0275elementStart(24, "button", 34);
+    \u0275\u0275namespaceSVG();
+    \u0275\u0275elementStart(25, "svg", 5);
+    \u0275\u0275element(26, "path", 35);
+    \u0275\u0275elementEnd();
+    \u0275\u0275text(27, "\u0625\u0636\u0627\u0641\u0629 \u0635\u0648\u0631\u0629");
+    \u0275\u0275elementEnd()()();
+    \u0275\u0275namespaceHTML();
+    \u0275\u0275elementStart(28, "div")(29, "p", 32);
+    \u0275\u0275text(30, "\u062A\u0641\u0636\u064A\u0644 \u0627\u0644\u0639\u0631\u0648\u0636");
+    \u0275\u0275elementEnd();
+    \u0275\u0275elementStart(31, "div", 36);
+    \u0275\u0275repeaterCreate(32, RequestWizardComponent_Conditional_16_Conditional_2_For_33_Template, 5, 6, "button", 16, _forTrack0);
+    \u0275\u0275elementEnd()();
+    \u0275\u0275template(34, RequestWizardComponent_Conditional_16_Conditional_2_Conditional_34_Template, 6, 0, "div");
+    \u0275\u0275elementStart(35, "div", 29)(36, "label", 37);
+    \u0275\u0275text(37, "\u0627\u0644\u0645\u0648\u0642\u0639");
+    \u0275\u0275elementEnd();
+    \u0275\u0275elementStart(38, "input", 38);
+    \u0275\u0275listener("input", function RequestWizardComponent_Conditional_16_Conditional_2_Template_input_input_38_listener($event) {
+      \u0275\u0275restoreView(_r5);
+      const ctx_r1 = \u0275\u0275nextContext(2);
+      return \u0275\u0275resetView(ctx_r1.v.setLocation($event));
+    });
+    \u0275\u0275elementEnd()();
+  }
+  if (rf & 2) {
+    const ctx_r1 = \u0275\u0275nextContext(2);
+    \u0275\u0275advance(6);
+    \u0275\u0275repeater(ctx_r1.v.issues);
+    \u0275\u0275advance(5);
+    \u0275\u0275property("value", ctx_r1.v.description);
+    \u0275\u0275advance(21);
+    \u0275\u0275repeater(ctx_r1.v.preferences);
+    \u0275\u0275advance(2);
+    \u0275\u0275conditional(ctx_r1.v.preferences[1].cls === "on" ? 34 : -1);
+    \u0275\u0275advance(4);
+    \u0275\u0275property("value", ctx_r1.v.location);
+  }
+}
+function RequestWizardComponent_Conditional_16_Conditional_3_Conditional_31_Template(rf, ctx) {
+  if (rf & 1) {
+    \u0275\u0275elementStart(0, "div", 42)(1, "span");
+    \u0275\u0275text(2, "\u0627\u0644\u0645\u0631\u0643\u0632 \u0627\u0644\u0645\u0641\u0636\u0644");
+    \u0275\u0275elementEnd();
+    \u0275\u0275elementStart(3, "b");
+    \u0275\u0275text(4);
+    \u0275\u0275elementEnd()();
+  }
+  if (rf & 2) {
+    const ctx_r1 = \u0275\u0275nextContext(3);
+    \u0275\u0275advance(4);
+    \u0275\u0275textInterpolate(ctx_r1.v.sumCenter);
+  }
+}
+function RequestWizardComponent_Conditional_16_Conditional_3_Template(rf, ctx) {
+  if (rf & 1) {
+    const _r12 = \u0275\u0275getCurrentView();
+    \u0275\u0275elementStart(0, "div")(1, "h2", 19);
+    \u0275\u0275text(2, "\u0631\u0627\u062C\u0639 \u0637\u0644\u0628\u0643");
+    \u0275\u0275elementEnd();
+    \u0275\u0275elementStart(3, "p", 20);
+    \u0275\u0275text(4, "\u062A\u0623\u0643\u062F \u0645\u0646 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0642\u0628\u0644 \u0625\u0631\u0633\u0627\u0644 \u0637\u0644\u0628 \u0627\u0644\u0635\u064A\u0627\u0646\u0629 \u0625\u0644\u0649 \u0645\u0631\u0627\u0643\u0632 \u0627\u0644\u0625\u0635\u0644\u0627\u062D.");
+    \u0275\u0275elementEnd()();
+    \u0275\u0275elementStart(5, "div", 41)(6, "div", 42)(7, "span");
+    \u0275\u0275text(8, "\u0627\u0644\u062C\u0647\u0627\u0632");
+    \u0275\u0275elementEnd();
+    \u0275\u0275elementStart(9, "b");
+    \u0275\u0275text(10);
+    \u0275\u0275elementEnd()();
+    \u0275\u0275elementStart(11, "div", 42)(12, "span");
+    \u0275\u0275text(13, "\u0642\u0633\u0645 \u0627\u0644\u0639\u0637\u0644");
+    \u0275\u0275elementEnd();
+    \u0275\u0275elementStart(14, "b");
+    \u0275\u0275text(15);
+    \u0275\u0275elementEnd()();
+    \u0275\u0275elementStart(16, "div", 42)(17, "span");
+    \u0275\u0275text(18, "\u0648\u0635\u0641 \u0627\u0644\u0639\u0637\u0644");
+    \u0275\u0275elementEnd();
+    \u0275\u0275elementStart(19, "b");
+    \u0275\u0275text(20);
+    \u0275\u0275elementEnd()();
+    \u0275\u0275elementStart(21, "div", 42)(22, "span");
+    \u0275\u0275text(23, "\u062A\u0641\u0636\u064A\u0644 \u0627\u0644\u0639\u0631\u0648\u0636");
+    \u0275\u0275elementEnd();
+    \u0275\u0275elementStart(24, "b");
+    \u0275\u0275text(25);
+    \u0275\u0275elementEnd()();
+    \u0275\u0275elementStart(26, "div", 42)(27, "span");
+    \u0275\u0275text(28, "\u0627\u0644\u0645\u0648\u0642\u0639");
+    \u0275\u0275elementEnd();
+    \u0275\u0275elementStart(29, "b");
+    \u0275\u0275text(30);
+    \u0275\u0275elementEnd()();
+    \u0275\u0275template(31, RequestWizardComponent_Conditional_16_Conditional_3_Conditional_31_Template, 5, 1, "div", 42);
+    \u0275\u0275elementEnd();
+    \u0275\u0275elementStart(32, "div", 18)(33, "button", 43);
+    \u0275\u0275listener("click", function RequestWizardComponent_Conditional_16_Conditional_3_Template_button_click_33_listener() {
+      \u0275\u0275restoreView(_r12);
+      const ctx_r1 = \u0275\u0275nextContext(2);
+      return \u0275\u0275resetView(ctx_r1.v.prev());
+    });
+    \u0275\u0275text(34, "\u0627\u0644\u0633\u0627\u0628\u0642");
+    \u0275\u0275elementEnd();
+    \u0275\u0275elementStart(35, "button", 44);
+    \u0275\u0275listener("click", function RequestWizardComponent_Conditional_16_Conditional_3_Template_button_click_35_listener() {
+      \u0275\u0275restoreView(_r12);
+      const ctx_r1 = \u0275\u0275nextContext(2);
+      return \u0275\u0275resetView(ctx_r1.submitRequest());
+    });
+    \u0275\u0275text(36, "\u062A\u0623\u0643\u064A\u062F \u0627\u0644\u0637\u0644\u0628");
+    \u0275\u0275elementEnd()();
+  }
+  if (rf & 2) {
+    const ctx_r1 = \u0275\u0275nextContext(2);
+    \u0275\u0275advance(10);
+    \u0275\u0275textInterpolate(ctx_r1.v.sumDevice);
+    \u0275\u0275advance(5);
+    \u0275\u0275textInterpolate(ctx_r1.v.sumIssue);
+    \u0275\u0275advance(5);
+    \u0275\u0275textInterpolate(ctx_r1.v.sumDescription);
+    \u0275\u0275advance(5);
+    \u0275\u0275textInterpolate(ctx_r1.v.sumPreference);
+    \u0275\u0275advance(5);
+    \u0275\u0275textInterpolate(ctx_r1.v.sumLocation);
+    \u0275\u0275advance();
+    \u0275\u0275conditional(ctx_r1.v.sumCenter !== "\u2014" ? 31 : -1);
+  }
+}
+function RequestWizardComponent_Conditional_16_Conditional_4_Template(rf, ctx) {
+  if (rf & 1) {
+    const _r13 = \u0275\u0275getCurrentView();
+    \u0275\u0275elementStart(0, "div", 18)(1, "button", 45);
+    \u0275\u0275listener("click", function RequestWizardComponent_Conditional_16_Conditional_4_Template_button_click_1_listener() {
+      \u0275\u0275restoreView(_r13);
+      const ctx_r1 = \u0275\u0275nextContext(2);
+      return \u0275\u0275resetView(ctx_r1.v.prev());
+    });
+    \u0275\u0275text(2, "\u0627\u0644\u0633\u0627\u0628\u0642");
+    \u0275\u0275elementEnd();
+    \u0275\u0275elementStart(3, "button", 44);
+    \u0275\u0275listener("click", function RequestWizardComponent_Conditional_16_Conditional_4_Template_button_click_3_listener() {
+      \u0275\u0275restoreView(_r13);
+      const ctx_r1 = \u0275\u0275nextContext(2);
+      return \u0275\u0275resetView(ctx_r1.v.next());
+    });
+    \u0275\u0275text(4);
+    \u0275\u0275elementEnd()();
+  }
+  if (rf & 2) {
+    const ctx_r1 = \u0275\u0275nextContext(2);
+    \u0275\u0275advance();
+    \u0275\u0275property("disabled", ctx_r1.v.noPrev);
+    \u0275\u0275advance(3);
+    \u0275\u0275textInterpolate(ctx_r1.v.nextLabel);
+  }
+}
+function RequestWizardComponent_Conditional_16_Template(rf, ctx) {
+  if (rf & 1) {
+    \u0275\u0275elementStart(0, "section", 13);
+    \u0275\u0275template(1, RequestWizardComponent_Conditional_16_Conditional_1_Template, 8, 0)(2, RequestWizardComponent_Conditional_16_Conditional_2_Template, 39, 3)(3, RequestWizardComponent_Conditional_16_Conditional_3_Template, 37, 6)(4, RequestWizardComponent_Conditional_16_Conditional_4_Template, 5, 2, "div", 18);
+    \u0275\u0275elementEnd();
+  }
+  if (rf & 2) {
+    const ctx_r1 = \u0275\u0275nextContext();
+    \u0275\u0275advance();
+    \u0275\u0275conditional(ctx_r1.v.s1 ? 1 : -1);
+    \u0275\u0275advance();
+    \u0275\u0275conditional(ctx_r1.v.s2 ? 2 : -1);
+    \u0275\u0275advance();
+    \u0275\u0275conditional(ctx_r1.v.s3 ? 3 : -1);
+    \u0275\u0275advance();
+    \u0275\u0275conditional(ctx_r1.v.showNav ? 4 : -1);
+  }
+}
+function RequestWizardComponent_Conditional_17_Template(rf, ctx) {
+  if (rf & 1) {
+    \u0275\u0275elementStart(0, "aside", 14)(1, "span", 46);
+    \u0275\u0275text(2, "\u2726");
+    \u0275\u0275elementEnd();
+    \u0275\u0275elementStart(3, "h2");
+    \u0275\u0275text(4, "\u0646\u0635\u064A\u062D\u0629 \u0642\u0628\u0644 \u0625\u0631\u0633\u0627\u0644 \u0627\u0644\u0637\u0644\u0628");
+    \u0275\u0275elementEnd();
+    \u0275\u0275elementStart(5, "p");
+    \u0275\u0275text(6, "\u0643\u0644 \u0645\u0627 \u0643\u0627\u0646 \u0648\u0635\u0641 \u0627\u0644\u0639\u0637\u0644 \u0623\u0648\u0636\u062D\u060C \u0643\u0644 \u0645\u0627 \u0633\u0627\u0639\u062F \u062F\u0647 \u0645\u0631\u0643\u0632 \u0627\u0644\u0635\u064A\u0627\u0646\u0629 \u064A\u0642\u062F\u0645 \u062A\u0642\u062F\u064A\u0631 \u0623\u062F\u0642.");
+    \u0275\u0275elementEnd();
+    \u0275\u0275elementStart(7, "ul")(8, "li");
+    \u0275\u0275text(9, "\u0627\u0643\u062A\u0628 \u0625\u0645\u062A\u0649 \u0627\u0644\u0645\u0634\u0643\u0644\u0629 \u0628\u062F\u0623\u062A.");
+    \u0275\u0275elementEnd();
+    \u0275\u0275elementStart(10, "li");
+    \u0275\u0275text(11, "\u0627\u0630\u0643\u0631 \u0623\u064A \u0623\u0635\u0648\u0627\u062A \u0623\u0648 \u0631\u0633\u0627\u0626\u0644 \u062E\u0637\u0623.");
+    \u0275\u0275elementEnd();
+    \u0275\u0275elementStart(12, "li");
+    \u0275\u0275text(13, "\u062A\u062C\u0646\u0628 \u0645\u0634\u0627\u0631\u0643\u0629 \u0628\u064A\u0627\u0646\u0627\u062A\u0643 \u0627\u0644\u0633\u0631\u064A\u0629.");
+    \u0275\u0275elementEnd()()();
+  }
+}
+function RequestWizardComponent_Conditional_18_Conditional_6_Template(rf, ctx) {
+  if (rf & 1) {
+    \u0275\u0275elementStart(0, "div", 48);
+    \u0275\u0275text(1, "\u062A\u0645 \u0627\u062E\u062A\u064A\u0627\u0631 \u0627\u0644\u0639\u0631\u0636 \u0628\u0646\u062C\u0627\u062D. \u0633\u064A\u062A\u0648\u0627\u0635\u0644 \u0645\u0639\u0643 \u0645\u0631\u0643\u0632 \u0627\u0644\u0635\u064A\u0627\u0646\u0629 \u0644\u062A\u0623\u0643\u064A\u062F \u0627\u0644\u062A\u0641\u0627\u0635\u064A\u0644.");
+    \u0275\u0275elementEnd();
+  }
+}
+function RequestWizardComponent_Conditional_18_Conditional_7_For_2_Template(rf, ctx) {
+  if (rf & 1) {
+    const _r14 = \u0275\u0275getCurrentView();
+    \u0275\u0275elementStart(0, "article", 51)(1, "div", 52)(2, "div")(3, "h3");
+    \u0275\u0275text(4);
+    \u0275\u0275elementEnd();
+    \u0275\u0275elementStart(5, "span", 53);
+    \u0275\u0275text(6);
+    \u0275\u0275elementStart(7, "small");
+    \u0275\u0275text(8);
+    \u0275\u0275elementEnd()()();
+    \u0275\u0275elementStart(9, "span", 54);
+    \u0275\u0275text(10);
+    \u0275\u0275elementEnd()();
+    \u0275\u0275elementStart(11, "div", 55)(12, "div")(13, "small");
+    \u0275\u0275text(14, "\u0627\u0644\u0633\u0639\u0631 \u0627\u0644\u062A\u0642\u062F\u064A\u0631\u064A");
+    \u0275\u0275elementEnd();
+    \u0275\u0275elementStart(15, "b");
+    \u0275\u0275text(16);
+    \u0275\u0275elementEnd()();
+    \u0275\u0275elementStart(17, "div")(18, "small");
+    \u0275\u0275text(19, "\u0648\u0642\u062A \u0627\u0644\u0625\u0635\u0644\u0627\u062D");
+    \u0275\u0275elementEnd();
+    \u0275\u0275elementStart(20, "b");
+    \u0275\u0275text(21);
+    \u0275\u0275elementEnd()()();
+    \u0275\u0275elementStart(22, "div", 56)(23, "button", 57);
+    \u0275\u0275listener("click", function RequestWizardComponent_Conditional_18_Conditional_7_For_2_Template_button_click_23_listener() {
+      const o_r15 = \u0275\u0275restoreView(_r14).$implicit;
+      return \u0275\u0275resetView(o_r15.accept());
+    });
+    \u0275\u0275text(24, "\u0642\u0628\u0648\u0644 \u0627\u0644\u0639\u0631\u0636");
+    \u0275\u0275elementEnd();
+    \u0275\u0275elementStart(25, "button", 43);
+    \u0275\u0275listener("click", function RequestWizardComponent_Conditional_18_Conditional_7_For_2_Template_button_click_25_listener() {
+      const o_r15 = \u0275\u0275restoreView(_r14).$implicit;
+      return \u0275\u0275resetView(o_r15.decline());
+    });
+    \u0275\u0275text(26, "\u0631\u0641\u0636 \u0627\u0644\u0639\u0631\u0636");
+    \u0275\u0275elementEnd()()();
+  }
+  if (rf & 2) {
+    const o_r15 = ctx.$implicit;
+    const ctx_r1 = \u0275\u0275nextContext(3);
+    \u0275\u0275advance(4);
+    \u0275\u0275textInterpolate(o_r15.name);
+    \u0275\u0275advance(2);
+    \u0275\u0275textInterpolate1("\u2605 ", o_r15.rating, " ");
+    \u0275\u0275advance(2);
+    \u0275\u0275textInterpolate1("(", o_r15.reviews, " \u062A\u0642\u064A\u064A\u0645)");
+    \u0275\u0275advance(2);
+    \u0275\u0275textInterpolate(o_r15.location);
+    \u0275\u0275advance(6);
+    \u0275\u0275textInterpolate(o_r15.price);
+    \u0275\u0275advance(5);
+    \u0275\u0275textInterpolate(o_r15.time);
+    \u0275\u0275advance(2);
+    \u0275\u0275property("disabled", ctx_r1.v.acceptedOffer === o_r15.id);
+  }
+}
+function RequestWizardComponent_Conditional_18_Conditional_7_Template(rf, ctx) {
+  if (rf & 1) {
+    \u0275\u0275elementStart(0, "div", 49);
+    \u0275\u0275repeaterCreate(1, RequestWizardComponent_Conditional_18_Conditional_7_For_2_Template, 27, 7, "article", 51, _forTrack2);
+    \u0275\u0275elementEnd();
+  }
+  if (rf & 2) {
+    const ctx_r1 = \u0275\u0275nextContext(2);
+    \u0275\u0275advance();
+    \u0275\u0275repeater(ctx_r1.v.offers);
+  }
+}
+function RequestWizardComponent_Conditional_18_Conditional_8_Template(rf, ctx) {
+  if (rf & 1) {
+    \u0275\u0275elementStart(0, "div", 50);
+    \u0275\u0275text(1, "\u0644\u0627 \u062A\u0648\u062C\u062F \u0639\u0631\u0648\u0636 \u0623\u062E\u0631\u0649 \u062D\u0627\u0644\u064A\u0627\u064B.");
+    \u0275\u0275elementEnd();
+  }
+}
+function RequestWizardComponent_Conditional_18_Template(rf, ctx) {
+  if (rf & 1) {
+    \u0275\u0275elementStart(0, "section", 15)(1, "div", 47)(2, "h2", 19);
+    \u0275\u0275text(3, "\u0627\u0644\u0639\u0631\u0648\u0636 \u0627\u0644\u0645\u062A\u0627\u062D\u0629 \u0645\u0646 \u0645\u0631\u0627\u0643\u0632 \u0627\u0644\u0635\u064A\u0627\u0646\u0629");
+    \u0275\u0275elementEnd();
+    \u0275\u0275elementStart(4, "p", 20);
+    \u0275\u0275text(5, "\u0627\u062E\u062A\u0631 \u0627\u0644\u0639\u0631\u0636 \u0627\u0644\u0623\u0646\u0633\u0628 \u0644\u0643 \u0645\u0646 \u0645\u0631\u0627\u0643\u0632 \u0627\u0644\u0635\u064A\u0627\u0646\u0629 \u0627\u0644\u0642\u0631\u064A\u0628\u0629.");
+    \u0275\u0275elementEnd()();
+    \u0275\u0275template(6, RequestWizardComponent_Conditional_18_Conditional_6_Template, 2, 0, "div", 48)(7, RequestWizardComponent_Conditional_18_Conditional_7_Template, 3, 0, "div", 49)(8, RequestWizardComponent_Conditional_18_Conditional_8_Template, 2, 0, "div", 50);
+    \u0275\u0275elementEnd();
+  }
+  if (rf & 2) {
+    const ctx_r1 = \u0275\u0275nextContext();
+    \u0275\u0275advance(6);
+    \u0275\u0275conditional(ctx_r1.v.acceptedOffer ? 6 : -1);
+    \u0275\u0275advance();
+    \u0275\u0275conditional(ctx_r1.v.offers.length ? 7 : 8);
+  }
+}
+var RequestWizardComponent = class _RequestWizardComponent extends DcBase {
+  constructor() {
+    super();
+    this.isSubmitted = false;
+    this.defaults = {};
+    this.state = {
+      step: 1,
+      device: 1,
+      issue: "\u0634\u0627\u0634\u0629 \u0645\u0643\u0633\u0648\u0631\u0629",
+      description: "",
+      preference: "multiple",
+      center: "\u0645\u0631\u0643\u0632 \u0627\u0644\u0646\u062E\u0628\u0629",
+      location: "\u0633\u0645\u0648\u062D\u0629",
+      acceptedOffer: "",
+      declinedOffers: []
+    };
+  }
+  submitRequest() {
+    this.isSubmitted = true;
+    this.setState({ step: 4 });
+  }
+  renderVals() {
+    const st = this.state;
+    const icons = { mobile: "M8.5 2.5h7a2 2 0 0 1 2 2v15a2 2 0 0 1-2 2h-7a2 2 0 0 1-2-2v-15a2 2 0 0 1 2-2zM11 18.5h2", tablet: "M6.5 3h11a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-11a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM11 17.5h2", laptop: "M5 6h14a1 1 0 0 1 1 1v9H4V7a1 1 0 0 1 1-1zM2 19h20" };
+    const devs = [
+      { id: 1, type: "mobile", name: "iPhone 13", sub: "\u0645\u0648\u0628\u0627\u064A\u0644 \xB7 Apple", def: true },
+      { id: 2, type: "laptop", name: "Dell XPS 13", sub: "\u0644\u0627\u0628\u062A\u0648\u0628 \xB7 Dell", def: false },
+      { id: 3, type: "tablet", name: "Galaxy Tab S8", sub: "\u062A\u0627\u0628\u0644\u062A \xB7 Samsung", def: false }
+    ];
+    const cur = devs.find((d) => d.id === st.device);
+    const currentDevice = cur ?? devs[0];
+    const issueSets = { mobile: ["\u0634\u0627\u0634\u0629 \u0645\u0643\u0633\u0648\u0631\u0629", "\u0628\u0637\u0627\u0631\u064A\u0629", "\u0644\u0627 \u064A\u0634\u062D\u0646", "\u0627\u0644\u0643\u0627\u0645\u064A\u0631\u0627", "\u0645\u0627\u0621 \u0623\u0648 \u0631\u0637\u0648\u0628\u0629", "\u0628\u0631\u0645\u062C\u064A\u0627\u062A"], laptop: ["\u0644\u0627 \u064A\u0639\u0645\u0644", "\u0633\u062E\u0648\u0646\u0629 \u0632\u0627\u0626\u062F\u0629", "\u0627\u0644\u0634\u0627\u0634\u0629", "\u0644\u0648\u062D\u0629 \u0627\u0644\u0645\u0641\u0627\u062A\u064A\u062D", "\u0627\u0644\u0644\u0648\u062D\u0629 \u0627\u0644\u0623\u0645", "\u0628\u0631\u0645\u062C\u064A\u0627\u062A"], tablet: ["\u0627\u0644\u0644\u0645\u0633 \u0644\u0627 \u064A\u0633\u062A\u062C\u064A\u0628", "\u0634\u0627\u0634\u0629 \u0645\u0643\u0633\u0648\u0631\u0629", "\u0628\u0637\u0627\u0631\u064A\u0629", "\u0645\u0646\u0641\u0630 \u0627\u0644\u0634\u062D\u0646", "\u0628\u0637\u064A\u0621", "\u0628\u0631\u0645\u062C\u064A\u0627\u062A"] };
+    const labels = ["\u0627\u0644\u062C\u0647\u0627\u0632", "\u0648\u0635\u0641 \u0627\u0644\u0639\u0637\u0644 \u0648\u0627\u0644\u0639\u0631\u0648\u0636", "\u0627\u0644\u0645\u0631\u0627\u062C\u0639\u0629"];
+    const step = st.step;
+    const offers = [
+      { id: "star-repair", name: "\u0645\u0631\u0643\u0632 \u0627\u0644\u0646\u062C\u0645 \u0644\u0644\u0635\u064A\u0627\u0646\u0629", rating: "4.8", reviews: "112", price: "350 \u062C.\u0645", time: "\u062E\u0644\u0627\u0644 24 \u0633\u0627\u0639\u0629", location: "\u0633\u0645\u0648\u062D\u0629" },
+      { id: "elite", name: "\u0645\u0631\u0643\u0632 \u0627\u0644\u0646\u062E\u0628\u0629", rating: "4.9", reviews: "128", price: "450 \u062C.\u0645", time: "\u062E\u0644\u0627\u0644 48 \u0633\u0627\u0639\u0629", location: "\u0633\u064A\u062F\u064A \u062C\u0627\u0628\u0631" },
+      { id: "smart-fix", name: "\u0633\u0645\u0627\u0631\u062A \u0641\u064A\u0643\u0633", rating: "4.6", reviews: "74", price: "400 \u062C.\u0645", time: "\u062E\u0644\u0627\u0644 36 \u0633\u0627\u0639\u0629", location: "\u0645\u064A\u0627\u0645\u064A" }
+    ];
+    return {
+      themeClass: (this.props["theme"] ?? "light") === "dark" ? "dark" : "",
+      stepper: labels.map((l, i) => ({ n: String(i + 1).replace(/\d/g, (d) => "\u0660\u0661\u0662\u0663\u0664\u0665\u0666\u0667\u0668\u0669"[Number(d)]), label: l, cls: step > i + 1 ? "done" : step === i + 1 ? "on" : "", color: step >= i + 1 ? "var(--ink)" : "var(--muted)" })),
+      s1: step === 1,
+      s2: step === 2,
+      s3: step === 3,
+      showNav: step < 3,
+      devices: devs.map((d) => ({ name: d.name, sub: d.sub, icon: icons[d.type], badge: d.def ? "\u0627\u0641\u062A\u0631\u0627\u0636\u064A" : "", cls: st.device === d.id ? "on" : "", pressed: st.device === d.id ? "true" : "false", pick: () => this.setState({ device: d.id, issue: issueSets[d.type][0] }) })),
+      issues: issueSets[currentDevice?.type].map((l) => ({ label: l, cls: st.issue === l ? "on" : "", pressed: st.issue === l ? "true" : "false", pick: () => this.setState({ issue: l }) })),
+      description: st.description,
+      setDescription: (e) => this.setState({ description: e.target.value }),
+      preferences: [
+        { value: "multiple", label: "\u0627\u0633\u062A\u0642\u0628\u0627\u0644 \u0639\u062F\u0629 \u0639\u0631\u0648\u0636", description: "\u0642\u0627\u0631\u0646 \u0628\u064A\u0646 \u0623\u0641\u0636\u0644 \u0627\u0644\u0645\u0631\u0627\u0643\u0632 \u0648\u0627\u0644\u0623\u0633\u0639\u0627\u0631", cls: st.preference === "multiple" ? "on" : "", pressed: st.preference === "multiple" ? "true" : "false", pick: () => this.setState({ preference: "multiple" }) },
+        { value: "specific", label: "\u0627\u062E\u062A\u064A\u0627\u0631 \u0645\u0631\u0643\u0632 \u0635\u064A\u0627\u0646\u0629 \u0645\u062D\u062F\u062F", description: "\u0623\u0631\u0633\u0644 \u0627\u0644\u0637\u0644\u0628 \u0625\u0644\u0649 \u0645\u0631\u0643\u0632 \u0623\u0639\u0631\u0641\u0647", cls: st.preference === "specific" ? "on" : "", pressed: st.preference === "specific" ? "true" : "false", pick: () => this.setState({ preference: "specific" }) }
+      ],
+      centers: ["\u0645\u0631\u0643\u0632 \u0627\u0644\u0646\u062E\u0628\u0629", "\u062A\u0643 \u0632\u0648\u0646", "\u0633\u0645\u0627\u0631\u062A \u0641\u064A\u0643\u0633"].map((center) => ({ label: center, cls: st.center === center ? "on" : "", pressed: st.center === center ? "true" : "false", pick: () => this.setState({ center }) })),
+      location: st.location,
+      setLocation: (e) => this.setState({ location: e.target.value }),
+      sumDevice: currentDevice?.name,
+      sumIssue: step >= 2 ? st.issue : "\u2014",
+      sumDescription: st.description || "\u2014",
+      sumPreference: st.preference === "multiple" ? "\u0627\u0633\u062A\u0642\u0628\u0627\u0644 \u0639\u062F\u0629 \u0639\u0631\u0648\u0636" : "\u0627\u062E\u062A\u064A\u0627\u0631 \u0645\u0631\u0643\u0632 \u0635\u064A\u0627\u0646\u0629 \u0645\u062D\u062F\u062F",
+      sumCenter: st.preference === "specific" ? st.center : "\u2014",
+      sumLocation: st.location || "\u2014",
+      noPrev: step === 1,
+      prev: () => this.setState({ step: Math.max(1, step - 1) }),
+      next: () => this.setState({ step: step + 1 }),
+      nextLabel: "\u0627\u0644\u062A\u0627\u0644\u064A \u2190",
+      acceptedOffer: st.acceptedOffer,
+      offerStatus: st.acceptedOffer ? "\u062A\u0645 \u0627\u062E\u062A\u064A\u0627\u0631 \u0627\u0644\u0639\u0631\u0636" : "",
+      offers: offers.filter((offer) => !st.declinedOffers.includes(offer.id)).map((offer) => __spreadProps(__spreadValues({}, offer), {
+        accept: () => this.setState({ acceptedOffer: offer.id }),
+        decline: () => this.setState((state) => ({ declinedOffers: state.declinedOffers.concat(offer.id) }))
+      }))
+    };
+  }
+  static {
+    this.\u0275fac = function RequestWizardComponent_Factory(__ngFactoryType__) {
+      return new (__ngFactoryType__ || _RequestWizardComponent)();
+    };
+  }
+  static {
+    this.\u0275cmp = /* @__PURE__ */ \u0275\u0275defineComponent({ type: _RequestWizardComponent, selectors: [["app-request-wizard"]], standalone: true, features: [\u0275\u0275InheritDefinitionFeature, \u0275\u0275StandaloneFeature], decls: 19, vars: 7, consts: [["dir", "rtl"], [2, "border-bottom", "1px solid var(--line)", "background", "var(--surface)"], [1, "wrap", 2, "display", "flex", "align-items", "center", "justify-content", "space-between", "gap", "16px", "min-height", "72px"], ["routerLink", "/", 2, "display", "flex", "align-items", "center", "gap", "10px"], [2, "width", "36px", "height", "36px", "border-radius", "10px", "background", "var(--primary)", "color", "var(--on-primary)", "display", "grid", "place-items", "center"], ["viewBox", "0 0 24 24", "aria-hidden", "true", 1, "ico"], ["d", "M14.7 6.3a4 4 0 0 0-5.4 5.4L3.5 17.5a1.8 1.8 0 0 0 2.5 2.5l5.8-5.8a4 4 0 0 0 5.4-5.4l-2.4 2.4-2.3-.5-.5-2.3z"], [2, "font-weight", "800", "font-size", "22px"], ["routerLink", "/devices", 1, "btn", "btn-ghost", 2, "min-height", "44px"], [1, "wrap", "wizard-page"], [2, "font-size", "30px", "font-weight", "800"], ["aria-label", "\u062E\u0637\u0648\u0627\u062A \u0627\u0644\u0637\u0644\u0628", 1, "steps"], [1, "wizard-layout"], [1, "card", "wizard-card"], [1, "card", "request-help"], [1, "card", 2, "flex", "1 1 100%", "min-width", "0", "padding", "28px", "display", "flex", "flex-direction", "column", "gap", "20px"], [3, "class"], [1, "sdot"], [1, "wizard-actions"], [2, "font-size", "22px", "font-weight", "800"], [2, "color", "var(--muted)"], [2, "display", "flex", "flex-direction", "column", "gap", "12px"], [3, "click"], [2, "display", "flex", "align-items", "center", "gap", "14px"], ["viewBox", "0 0 24 24", "aria-hidden", "true", 1, "ico", 2, "width", "28px", "height", "28px", "color", "var(--primary)"], [2, "font-weight", "600", "font-size", "13px", "color", "var(--muted)"], [2, "font-size", "13px", "color", "var(--accent)", "font-weight", "800"], [2, "display", "grid", "grid-template-columns", "repeat(auto-fill,minmax(200px,1fr))", "gap", "12px"], [2, "min-height", "60px", 3, "class"], [2, "display", "flex", "flex-direction", "column", "gap", "6px"], ["for", "desc", 2, "font-weight", "700", "font-size", "14px"], ["id", "desc", "rows", "4", "placeholder", "\u0645\u062A\u0649 \u0628\u062F\u0623 \u0627\u0644\u0639\u0637\u0644\u061F \u0647\u0644 \u0633\u0642\u0637 \u0627\u0644\u062C\u0647\u0627\u0632\u061F \u0645\u0627\u0630\u0627 \u064A\u062D\u062F\u062B \u0628\u0627\u0644\u0636\u0628\u0637\u061F", 3, "input", "value"], [2, "font-weight", "700", "font-size", "14px", "margin-bottom", "8px"], [2, "display", "flex", "gap", "12px", "flex-wrap", "wrap"], [1, "slot"], ["d", "M12 5v14M5 12h14"], [1, "choice-grid"], ["for", "location", 2, "font-weight", "700", "font-size", "14px"], ["id", "location", "placeholder", "\u0645\u062B\u0627\u0644: \u0633\u0645\u0648\u062D\u0629\u060C \u0627\u0644\u0625\u0633\u0643\u0646\u062F\u0631\u064A\u0629", 3, "input", "value"], [2, "min-height", "60px", 3, "click"], [2, "display", "flex", "gap", "8px", "flex-wrap", "wrap"], [1, "review-list"], [1, "review-item"], [1, "btn", "btn-ghost", 3, "click"], [1, "btn", "btn-primary", 3, "click"], [1, "btn", "btn-ghost", 3, "click", "disabled"], [1, "feature-icon"], [1, "offers-view-heading"], [1, "success-note"], [1, "offers-list"], [1, "empty-offers"], [1, "offer-card"], [1, "offer-head"], [1, "rating"], [1, "offer-location"], [1, "offer-details"], [1, "offer-actions"], [1, "btn", "btn-primary", 3, "click", "disabled"]], template: function RequestWizardComponent_Template(rf, ctx) {
+      if (rf & 1) {
+        \u0275\u0275elementStart(0, "div", 0)(1, "header", 1)(2, "div", 2)(3, "a", 3)(4, "span", 4);
+        \u0275\u0275namespaceSVG();
+        \u0275\u0275elementStart(5, "svg", 5);
+        \u0275\u0275element(6, "path", 6);
+        \u0275\u0275elementEnd()();
+        \u0275\u0275namespaceHTML();
+        \u0275\u0275elementStart(7, "span", 7);
+        \u0275\u0275text(8, "DevFix");
+        \u0275\u0275elementEnd()();
+        \u0275\u0275elementStart(9, "a", 8);
+        \u0275\u0275text(10, "\u0625\u0644\u063A\u0627\u0621 \u0648\u0627\u0644\u0639\u0648\u062F\u0629");
+        \u0275\u0275elementEnd()()();
+        \u0275\u0275elementStart(11, "main", 9)(12, "h1", 10);
+        \u0275\u0275text(13, "\u0637\u0644\u0628 \u0635\u064A\u0627\u0646\u0629 \u062C\u062F\u064A\u062F");
+        \u0275\u0275elementEnd();
+        \u0275\u0275template(14, RequestWizardComponent_Conditional_14_Template, 3, 0, "ol", 11);
+        \u0275\u0275elementStart(15, "div", 12);
+        \u0275\u0275template(16, RequestWizardComponent_Conditional_16_Template, 5, 4, "section", 13)(17, RequestWizardComponent_Conditional_17_Template, 14, 0, "aside", 14)(18, RequestWizardComponent_Conditional_18_Template, 9, 2, "section", 15);
+        \u0275\u0275elementEnd()()();
+      }
+      if (rf & 2) {
+        \u0275\u0275classMapInterpolate1("dx ", ctx.v.themeClass, "");
+        \u0275\u0275advance(14);
+        \u0275\u0275conditional(!ctx.isSubmitted ? 14 : -1);
+        \u0275\u0275advance(2);
+        \u0275\u0275conditional(!ctx.isSubmitted ? 16 : -1);
+        \u0275\u0275advance();
+        \u0275\u0275conditional(!ctx.isSubmitted ? 17 : -1);
+        \u0275\u0275advance();
+        \u0275\u0275conditional(ctx.isSubmitted ? 18 : -1);
+      }
+    }, dependencies: [RouterLink], styles: ['\n\n[_nghost-%COMP%] {\n  display: block;\n}\n.dx[_ngcontent-%COMP%] {\n  --bg:#F6F7FB;\n  --surface:#FFFFFF;\n  --ink:#12163A;\n  --muted:#575D7E;\n  --line:#E1E4F1;\n  --primary:#3A3FD6;\n  --on-primary:#FFFFFF;\n  --primary-soft:#ECEDFE;\n  --accent:#0B7A55;\n  --on-accent:#FFFFFF;\n  --accent-soft:#DCF4E8;\n  --warn:#9A4A07;\n  --warn-soft:#FEEFD6;\n  font-family:\n    "Cairo",\n    "Tajawal",\n    system-ui,\n    sans-serif;\n  background: var(--bg);\n  color: var(--ink);\n  line-height: 1.6;\n  min-height: 100%;\n}\n.dx.dark[_ngcontent-%COMP%] {\n  --bg:#0B0E24;\n  --surface:#141939;\n  --ink:#EEF0FF;\n  --muted:#A5ABD3;\n  --line:#262C58;\n  --primary:#8E93FF;\n  --on-primary:#0B0E24;\n  --primary-soft:#222866;\n  --accent:#34D399;\n  --on-accent:#04281B;\n  --accent-soft:#0E3A2B;\n  --warn:#FBBF24;\n  --warn-soft:#3A2A0A;\n}\n.dx[_ngcontent-%COMP%]   *[_ngcontent-%COMP%] {\n  box-sizing: border-box;\n}\n.dx[_ngcontent-%COMP%]   h1[_ngcontent-%COMP%], \n.dx[_ngcontent-%COMP%]   h2[_ngcontent-%COMP%], \n.dx[_ngcontent-%COMP%]   h3[_ngcontent-%COMP%], \n.dx[_ngcontent-%COMP%]   p[_ngcontent-%COMP%] {\n  margin: 0;\n}\n.dx[_ngcontent-%COMP%]   a[_ngcontent-%COMP%] {\n  color: inherit;\n  text-decoration: none;\n}\n.dx[_ngcontent-%COMP%]   .wrap[_ngcontent-%COMP%] {\n  max-width: 1100px;\n  margin: 0 auto;\n  padding: 0 32px;\n}\n.dx[_ngcontent-%COMP%]   .wizard-page[_ngcontent-%COMP%] {\n  padding-top: 32px;\n  padding-bottom: 64px;\n  display: flex;\n  flex-direction: column;\n  gap: 24px;\n}\n.dx[_ngcontent-%COMP%]   .btn[_ngcontent-%COMP%] {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  gap: 8px;\n  min-height: 48px;\n  padding: 0 24px;\n  border-radius: 10px;\n  border: 1px solid transparent;\n  font: 700 15px "Cairo", sans-serif;\n  cursor: pointer;\n}\n.dx[_ngcontent-%COMP%]   .btn-primary[_ngcontent-%COMP%] {\n  background: var(--primary);\n  color: var(--on-primary);\n}\n.dx[_ngcontent-%COMP%]   .btn-ghost[_ngcontent-%COMP%] {\n  background: transparent;\n  color: var(--ink);\n  border-color: var(--line);\n}\n.dx[_ngcontent-%COMP%]   .btn[_ngcontent-%COMP%]:disabled {\n  opacity: .5;\n  cursor: not-allowed;\n}\n.dx[_ngcontent-%COMP%]   .card[_ngcontent-%COMP%] {\n  background: var(--surface);\n  border: 1px solid var(--line);\n  border-radius: 16px;\n}\n.dx[_ngcontent-%COMP%]   .wizard-layout[_ngcontent-%COMP%] {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 24px;\n  align-items: flex-start;\n}\n.dx[_ngcontent-%COMP%]   .wizard-card[_ngcontent-%COMP%] {\n  flex: 999 1 560px;\n  min-width: 0;\n  padding: 28px;\n  display: flex;\n  flex-direction: column;\n  gap: 20px;\n}\n.dx[_ngcontent-%COMP%]   .chip[_ngcontent-%COMP%] {\n  display: inline-flex;\n  align-items: center;\n  min-height: 44px;\n  padding: 0 18px;\n  border-radius: 999px;\n  border: 1px solid var(--line);\n  background: var(--surface);\n  color: var(--ink);\n  font: 600 15px "Cairo", sans-serif;\n  cursor: pointer;\n}\n.dx[_ngcontent-%COMP%]   .chip.on[_ngcontent-%COMP%] {\n  background: var(--primary);\n  color: var(--on-primary);\n  border-color: var(--primary);\n}\n.dx[_ngcontent-%COMP%]   .opt[_ngcontent-%COMP%] {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 12px;\n  width: 100%;\n  min-height: 68px;\n  padding: 12px 18px;\n  border-radius: 16px;\n  border: 2px solid var(--line);\n  background: var(--surface);\n  color: var(--ink);\n  font: 700 16px "Cairo", sans-serif;\n  text-align: right;\n  cursor: pointer;\n}\n.dx[_ngcontent-%COMP%]   .opt.on[_ngcontent-%COMP%] {\n  border-color: var(--primary);\n  background: var(--primary-soft);\n}\n.dx[_ngcontent-%COMP%]   .ico[_ngcontent-%COMP%] {\n  width: 22px;\n  height: 22px;\n  fill: none;\n  stroke: currentColor;\n  stroke-width: 1.8;\n  stroke-linecap: round;\n  stroke-linejoin: round;\n}\n.dx[_ngcontent-%COMP%]   .steps[_ngcontent-%COMP%] {\n  list-style: none;\n  margin: 0;\n  padding: 0;\n  display: flex;\n  gap: 0;\n  direction: rtl;\n}\n.dx[_ngcontent-%COMP%]   .step[_ngcontent-%COMP%] {\n  display: flex;\n  align-items: center;\n  gap: 9px;\n  flex: 1;\n  color: var(--muted);\n  font-weight: 700;\n}\n.dx[_ngcontent-%COMP%]   .step[_ngcontent-%COMP%]:not(:last-child)::after {\n  content: "";\n  height: 1px;\n  flex: 1;\n  margin: 0 12px;\n  background: var(--line);\n}\n.dx[_ngcontent-%COMP%]   .sdot[_ngcontent-%COMP%] {\n  width: 28px;\n  height: 28px;\n  border-radius: 50%;\n  display: grid;\n  place-items: center;\n  flex: none;\n  font-weight: 800;\n  font-size: 12px;\n  background: var(--surface);\n  border: 1px solid #cfd5e2;\n  color: var(--muted);\n}\n.dx[_ngcontent-%COMP%]   .step.on[_ngcontent-%COMP%], \n.dx[_ngcontent-%COMP%]   .step.done[_ngcontent-%COMP%] {\n  color: var(--primary);\n}\n.dx[_ngcontent-%COMP%]   .step.on[_ngcontent-%COMP%]   .sdot[_ngcontent-%COMP%], \n.dx[_ngcontent-%COMP%]   .step.done[_ngcontent-%COMP%]   .sdot[_ngcontent-%COMP%] {\n  border-color: var(--primary);\n  color: var(--primary);\n}\n.dx[_ngcontent-%COMP%]   .step.on[_ngcontent-%COMP%]   .sdot[_ngcontent-%COMP%] {\n  background: var(--primary);\n  color: var(--on-primary);\n}\n.dx[_ngcontent-%COMP%]   .slot[_ngcontent-%COMP%] {\n  flex: 1 1 140px;\n  aspect-ratio: 4/3;\n  border-radius: 14px;\n  border: 2px dashed var(--line);\n  background: var(--bg);\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  justify-content: center;\n  gap: 6px;\n  color: var(--muted);\n  font: 600 14px "Cairo", sans-serif;\n  cursor: pointer;\n}\n.dx[_ngcontent-%COMP%]   .row[_ngcontent-%COMP%] {\n  display: flex;\n  justify-content: space-between;\n  gap: 12px;\n  padding: 8px 0;\n  border-top: 1px solid var(--line);\n  font-size: 15px;\n}\n.dx[_ngcontent-%COMP%]   textarea[_ngcontent-%COMP%], \n.dx[_ngcontent-%COMP%]   input[_ngcontent-%COMP%] {\n  width: 100%;\n  border-radius: 12px;\n  border: 1px solid var(--line);\n  background: var(--bg);\n  color: var(--ink);\n  padding: 14px;\n  font: 600 15px "Cairo", sans-serif;\n}\n.dx[_ngcontent-%COMP%]   textarea[_ngcontent-%COMP%] {\n  resize: vertical;\n}\n.dx[_ngcontent-%COMP%]   .choice-grid[_ngcontent-%COMP%] {\n  display: grid;\n  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));\n  gap: 12px;\n}\n.dx[_ngcontent-%COMP%]   .choice[_ngcontent-%COMP%] {\n  display: flex;\n  flex-direction: column;\n  align-items: flex-start;\n  gap: 4px;\n  padding: 16px;\n  border: 2px solid var(--line);\n  border-radius: 16px;\n  background: var(--surface);\n  color: var(--ink);\n  font: 700 15px "Cairo", sans-serif;\n  text-align: right;\n  cursor: pointer;\n}\n.dx[_ngcontent-%COMP%]   .choice[_ngcontent-%COMP%]   small[_ngcontent-%COMP%] {\n  color: var(--muted);\n  font-weight: 600;\n}\n.dx[_ngcontent-%COMP%]   .choice.on[_ngcontent-%COMP%] {\n  border-color: var(--primary);\n  background: var(--primary-soft);\n}\n.dx[_ngcontent-%COMP%]   .review-list[_ngcontent-%COMP%] {\n  display: flex;\n  flex-direction: column;\n  border-top: 1px solid var(--line);\n}\n.dx[_ngcontent-%COMP%]   .review-item[_ngcontent-%COMP%] {\n  display: flex;\n  justify-content: space-between;\n  gap: 20px;\n  padding: 13px 0;\n  border-bottom: 1px solid var(--line);\n}\n.dx[_ngcontent-%COMP%]   .review-item[_ngcontent-%COMP%]   span[_ngcontent-%COMP%] {\n  color: var(--muted);\n}\n.dx[_ngcontent-%COMP%]   .review-item[_ngcontent-%COMP%]   b[_ngcontent-%COMP%] {\n  max-width: 65%;\n  text-align: left;\n}\n.dx[_ngcontent-%COMP%]   .offers-view-heading[_ngcontent-%COMP%] {\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n.dx[_ngcontent-%COMP%]   .offers-list[_ngcontent-%COMP%] {\n  display: grid;\n  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));\n  gap: 14px;\n}\n.dx[_ngcontent-%COMP%]   .offer-card[_ngcontent-%COMP%] {\n  padding: 18px;\n  border: 1px solid var(--line);\n  border-radius: 16px;\n  background: var(--surface);\n}\n.dx[_ngcontent-%COMP%]   .offer-head[_ngcontent-%COMP%], \n.dx[_ngcontent-%COMP%]   .offer-details[_ngcontent-%COMP%], \n.dx[_ngcontent-%COMP%]   .offer-actions[_ngcontent-%COMP%] {\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n  gap: 12px;\n}\n.dx[_ngcontent-%COMP%]   .offer-head[_ngcontent-%COMP%]   h3[_ngcontent-%COMP%] {\n  font-size: 18px;\n}\n.dx[_ngcontent-%COMP%]   .rating[_ngcontent-%COMP%] {\n  color: var(--warn);\n  font-weight: 800;\n}\n.dx[_ngcontent-%COMP%]   .rating[_ngcontent-%COMP%]   small[_ngcontent-%COMP%] {\n  color: var(--muted);\n  font-weight: 600;\n}\n.dx[_ngcontent-%COMP%]   .offer-location[_ngcontent-%COMP%] {\n  color: var(--muted);\n  font-size: 14px;\n}\n.dx[_ngcontent-%COMP%]   .offer-details[_ngcontent-%COMP%] {\n  margin: 16px 0;\n  padding: 12px 0;\n  border-top: 1px solid var(--line);\n  border-bottom: 1px solid var(--line);\n}\n.dx[_ngcontent-%COMP%]   .offer-details[_ngcontent-%COMP%]   div[_ngcontent-%COMP%] {\n  display: flex;\n  flex-direction: column;\n  gap: 2px;\n}\n.dx[_ngcontent-%COMP%]   .offer-details[_ngcontent-%COMP%]   small[_ngcontent-%COMP%] {\n  color: var(--muted);\n}\n.dx[_ngcontent-%COMP%]   .offer-details[_ngcontent-%COMP%]   b[_ngcontent-%COMP%] {\n  font-size: 17px;\n}\n.dx[_ngcontent-%COMP%]   .offer-actions[_ngcontent-%COMP%]   .btn[_ngcontent-%COMP%] {\n  min-height: 44px;\n  flex: 1;\n}\n.dx[_ngcontent-%COMP%]   .wizard-actions[_ngcontent-%COMP%] {\n  display: flex;\n  justify-content: space-between;\n  gap: 12px;\n  border-top: 1px solid var(--line);\n  padding-top: 20px;\n}\n.dx[_ngcontent-%COMP%]   .wizard-actions[_ngcontent-%COMP%]   .btn[_ngcontent-%COMP%] {\n  direction: rtl;\n}\n.dx[_ngcontent-%COMP%]   .request-help[_ngcontent-%COMP%] {\n  flex: 1 1 280px;\n  max-width: 320px;\n  min-width: 0;\n  padding: 24px;\n}\n.dx[_ngcontent-%COMP%]   .feature-icon[_ngcontent-%COMP%] {\n  display: grid;\n  place-items: center;\n  width: 38px;\n  height: 38px;\n  border-radius: 11px;\n  background: var(--primary-soft);\n  color: var(--primary);\n  font-size: 22px;\n  margin-bottom: 14px;\n}\n.dx[_ngcontent-%COMP%]   .request-help[_ngcontent-%COMP%]   h2[_ngcontent-%COMP%] {\n  font-size: 18px;\n  font-weight: 800;\n  margin-bottom: 8px;\n}\n.dx[_ngcontent-%COMP%]   .request-help[_ngcontent-%COMP%]   p[_ngcontent-%COMP%] {\n  font-size: 13px;\n  color: var(--muted);\n  margin-bottom: 14px;\n}\n.dx[_ngcontent-%COMP%]   .request-help[_ngcontent-%COMP%]   ul[_ngcontent-%COMP%] {\n  margin: 0;\n  padding: 0 20px 0 0;\n  color: var(--muted);\n  font-size: 13px;\n  display: grid;\n  gap: 8px;\n}\n.dx[_ngcontent-%COMP%]   .request-help[_ngcontent-%COMP%]   li[_ngcontent-%COMP%]::marker {\n  color: var(--primary);\n}\n.dx[_ngcontent-%COMP%]   .success-note[_ngcontent-%COMP%] {\n  padding: 12px 16px;\n  border-radius: 12px;\n  background: var(--accent-soft);\n  color: var(--accent);\n  font-weight: 700;\n}\n.dx[_ngcontent-%COMP%]   .empty-offers[_ngcontent-%COMP%] {\n  padding: 24px;\n  text-align: center;\n  color: var(--muted);\n  background: var(--bg);\n  border-radius: 12px;\n}\n/*# sourceMappingURL=request-wizard.component.css.map */'] });
+  }
+};
+(() => {
+  (typeof ngDevMode === "undefined" || ngDevMode) && \u0275setClassDebugInfo(RequestWizardComponent, { className: "RequestWizardComponent", filePath: "app\\pages\\customer\\request-wizard\\request-wizard.component.ts", lineNumber: 12 });
+})();
+
 // src/app/app.routes.ts
 var routes = [
   { path: "", component: PageComponent, data: { page: "home" } },
   { path: "auth", component: PageComponent, data: { page: "auth" } },
   { path: "devices", component: PageComponent, data: { page: "devices" } },
   { path: "search", component: PageComponent, data: { page: "search" } },
-  { path: "wizard", component: PageComponent, data: { page: "wizard" } },
+  { path: "wizard", component: RequestWizardComponent },
   { path: "bids", component: PageComponent, data: { page: "bids" } },
   { path: "quote-approval", component: PageComponent, data: { page: "quote-approval" } },
   { path: "notifications", component: PageComponent, data: { page: "notifications" } },
