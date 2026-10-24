@@ -1,13 +1,14 @@
 import { Routes } from '@angular/router';
 import { PageComponent } from './page.component';
 import { ShowcaseComponent } from './showcase.component';
+import { RequestWizardComponent } from './pages/customer/request-wizard/request-wizard.component';
 
 export const routes: Routes = [
   { path: '', component: PageComponent, data: { page: 'home' } },
   { path: 'auth', component: PageComponent, data: { page: 'auth' } },
   { path: 'devices', component: PageComponent, data: { page: 'devices' } },
   { path: 'search', component: PageComponent, data: { page: 'search' } },
-  { path: 'wizard', component: PageComponent, data: { page: 'wizard' } },
+  { path: 'wizard', component: RequestWizardComponent },
   { path: 'bids', component: PageComponent, data: { page: 'bids' } },
   { path: 'quote-approval', component: PageComponent, data: { page: 'quote-approval' } },
   { path: 'notifications', component: PageComponent, data: { page: 'notifications' } },
